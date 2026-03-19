@@ -1,11 +1,11 @@
 import { createElement, useState, useEffect, useRef } from "react";
 import htm from "htm";
-import { getCompanyBySiren, enrichWithLusha, logActivity } from "./api.js?v=7";
+import { getCompanyBySiren, enrichWithLusha, logActivity } from "./api.js?v=8";
 import { formatSiren, formatSiret, formatCurrency, formatDate, getEmployeeLabel,
          getLegalFormLabel, getNafSectionLabel, getLatestFinance,
          CATEGORY_STYLES, exportToCSV, exportToJSON,
-         isStarred, toggleStar } from "./utils.js?v=7";
-import { LoadingSpinner, ErrorMessage, Badge, StatusDot } from "./components.js?v=7";
+         isStarred, toggleStar } from "./utils.js?v=8";
+import { LoadingSpinner, ErrorMessage, Badge, StatusDot } from "./components.js?v=8";
 
 const html = htm.bind(createElement);
 
@@ -50,6 +50,41 @@ function CompanyHeader({ company }) {
             ${company.nombre_etablissements_ouverts || 0} open / ${company.nombre_etablissements || 0} total
           </p>
         </div>
+      </div>
+
+      <!-- External Links -->
+      <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-gray-100">
+        <span className="text-xs text-gray-400 uppercase font-semibold mr-1">Open:</span>
+        <a href=${"https://annuaire-entreprises.data.gouv.fr/entreprise/" + company.siren}
+           target="_blank" rel="noopener noreferrer"
+           className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded-full hover:bg-blue-100 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838l-3.14 1.346 4.352 1.862a1 1 0 00.788 0l7-3a1 1 0 000-1.838l-7-3.002zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/></svg>
+          Gov Directory
+        </a>
+        <a href=${"https://www.societe.com/cgi-bin/search?champs=" + encodeURIComponent(company.siren)}
+           target="_blank" rel="noopener noreferrer"
+           className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-purple-700 bg-purple-50 rounded-full hover:bg-purple-100 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4zm3 1h6v4H7V5zm6 6H7v2h6v-2z" clipRule="evenodd"/></svg>
+          Societe.com
+        </a>
+        <a href=${"https://www.pappers.fr/entreprise/" + company.siren}
+           target="_blank" rel="noopener noreferrer"
+           className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full hover:bg-emerald-100 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd"/></svg>
+          Pappers
+        </a>
+        <a href=${"https://www.google.com/search?q=" + encodeURIComponent(company.nom_complet + " " + (company.siege ? (company.siege.libelle_commune || "") : ""))}
+           target="_blank" rel="noopener noreferrer"
+           className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd"/></svg>
+          Google
+        </a>
+        <a href=${"https://www.linkedin.com/search/results/companies/?keywords=" + encodeURIComponent(company.nom_complet)}
+           target="_blank" rel="noopener noreferrer"
+           className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-sky-700 bg-sky-50 rounded-full hover:bg-sky-100 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          LinkedIn
+        </a>
       </div>
     </div>
   `;
@@ -110,6 +145,15 @@ function SiegeCard({ siege }) {
   `;
 }
 
+// ── LinkedIn icon SVG (reusable) ────────────────────
+function LinkedInIcon({ className }) {
+  return html`
+    <svg xmlns="http://www.w3.org/2000/svg" className=${className || "h-3.5 w-3.5"} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+    </svg>
+  `;
+}
+
 // ── Contact Info Card (Lusha result) ────────────────
 function ContactInfo({ data, error, loading }) {
   if (loading) {
@@ -131,8 +175,14 @@ function ContactInfo({ data, error, loading }) {
 
   const emails = data.emails || data.emailAddresses || [];
   const phones = data.phoneNumbers || data.phones || [];
+  // Extract LinkedIn URL from Lusha socialNetworks or other fields
+  const socialNetworks = data.socialNetworks || data.social || [];
+  const linkedinUrl = data.linkedinUrl || data.linkedin_url
+    || (Array.isArray(socialNetworks) ? (socialNetworks.find(s => s.type === "linkedin" || s.label === "linkedin") || {}).url : null)
+    || (typeof socialNetworks === "object" && !Array.isArray(socialNetworks) ? socialNetworks.linkedin : null)
+    || null;
 
-  if (emails.length === 0 && phones.length === 0) {
+  if (emails.length === 0 && phones.length === 0 && !linkedinUrl) {
     return html`
       <div className="py-2 px-3 text-xs text-gray-400">No contact info found</div>
     `;
@@ -170,6 +220,15 @@ function ContactInfo({ data, error, loading }) {
               </span>
             `;
           })}
+        </div>
+      `}
+      ${linkedinUrl && html`
+        <div className="flex items-center gap-1 mt-1">
+          <a href=${linkedinUrl} target="_blank" rel="noopener noreferrer"
+             className="inline-flex items-center gap-1 text-xs text-sky-700 hover:text-sky-900 hover:underline font-medium">
+            <${LinkedInIcon} className="h-3 w-3" />
+            LinkedIn Profile
+          </a>
         </div>
       `}
     </div>
@@ -288,17 +347,45 @@ function DirectorsList({ dirigeants, companyName, username }) {
               const isPerson = d.type_dirigeant === "personne physique";
               const enrichState = enrichment[i];
               const hasResult = enrichState && (enrichState.data || enrichState.error);
+              // Build LinkedIn search URL for the person
+              const directorName = isPerson ? ((d.prenoms || "").split(" ")[0] + " " + (d.nom || "").replace(/\s*\(.*?\)\s*/g, "").trim()).trim() : "";
+              const linkedinSearchUrl = isPerson && directorName
+                ? "https://www.linkedin.com/search/results/people/?keywords=" + encodeURIComponent(directorName + " " + (companyName || ""))
+                : null;
+              // Check if Lusha returned a direct LinkedIn URL
+              const lushaLinkedin = enrichState && enrichState.data
+                ? (enrichState.data.linkedinUrl || enrichState.data.linkedin_url
+                  || (Array.isArray(enrichState.data.socialNetworks) ? ((enrichState.data.socialNetworks.find(s => s.type === "linkedin" || s.label === "linkedin")) || {}).url : null)
+                  || (enrichState.data.socialNetworks && !Array.isArray(enrichState.data.socialNetworks) ? enrichState.data.socialNetworks.linkedin : null)
+                  || null)
+                : null;
               return html`
                 <tr key=${i} className="border-b border-gray-50 align-top">
                   <td className="py-2 pr-3 text-gray-700">
-                    ${isPerson
-                      ? ((d.prenoms || "") + " " + (d.nom || "")).trim()
-                      : (d.denomination || "N/A")
-                    }
-                    ${isPerson && d.annee_de_naissance
-                      ? html` <span className="text-xs text-gray-400">(${d.annee_de_naissance})</span>`
-                      : null
-                    }
+                    <div className="flex items-center gap-2">
+                      <span>
+                        ${isPerson
+                          ? ((d.prenoms || "") + " " + (d.nom || "")).trim()
+                          : (d.denomination || "N/A")
+                        }
+                        ${isPerson && d.annee_de_naissance
+                          ? html` <span className="text-xs text-gray-400">(${d.annee_de_naissance})</span>`
+                          : null
+                        }
+                      </span>
+                      ${lushaLinkedin && html`
+                        <a href=${lushaLinkedin} target="_blank" rel="noopener noreferrer"
+                           className="inline-flex items-center text-sky-600 hover:text-sky-800" title="View LinkedIn Profile">
+                          <${LinkedInIcon} className="h-4 w-4" />
+                        </a>
+                      `}
+                      ${!lushaLinkedin && linkedinSearchUrl && html`
+                        <a href=${linkedinSearchUrl} target="_blank" rel="noopener noreferrer"
+                           className="inline-flex items-center text-gray-400 hover:text-sky-600 transition-colors" title="Search on LinkedIn">
+                          <${LinkedInIcon} className="h-3.5 w-3.5" />
+                        </a>
+                      `}
+                    </div>
                     ${enrichState && html`
                       <div className="mt-1">
                         <${ContactInfo} loading=${enrichState.loading} data=${enrichState.data} error=${enrichState.error} />

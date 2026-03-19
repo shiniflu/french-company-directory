@@ -1,0 +1,556 @@
+import { createElement, useState, useEffect, useRef } from "react";
+import htm from "htm";
+import { getCompanyBySiren, enrichWithLusha, logActivity } from "./api.js?v=7";
+import { formatSiren, formatSiret, formatCurrency, formatDate, getEmployeeLabel,
+         getLegalFormLabel, getNafSectionLabel, getLatestFinance,
+         CATEGORY_STYLES, exportToCSV, exportToJSON,
+         isStarred, toggleStar } from "./utils.js?v=7";
+import { LoadingSpinner, ErrorMessage, Badge, StatusDot } from "./components.js?v=7";
+
+const html = htm.bind(createElement);
+
+// ── Company Header ──────────────────────────────────
+function CompanyHeader({ company }) {
+  const catStyle = CATEGORY_STYLES[company.categorie_entreprise];
+  return html`
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">${company.nom_complet}</h2>
+          ${company.sigle && html`<p className="text-gray-500 text-sm">(${company.sigle})</p>`}
+          <div className="flex flex-wrap items-center gap-3 mt-3">
+            <span className="text-sm text-gray-500 font-mono">SIREN: ${formatSiren(company.siren)}</span>
+            ${company.siege && html`
+              <span className="text-sm text-gray-500 font-mono">SIRET: ${formatSiret(company.siege.siret)}</span>
+            `}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <${StatusDot} active=${company.etat_administratif === "A"} />
+          ${catStyle && html`<${Badge} label=${catStyle.label} bg=${catStyle.bg} text=${catStyle.text} />`}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-4 border-t border-gray-100">
+        <div>
+          <p className="text-xs text-gray-400 uppercase">Legal Form</p>
+          <p className="text-sm text-gray-700 mt-0.5">${getLegalFormLabel(company.nature_juridique)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-400 uppercase">Created</p>
+          <p className="text-sm text-gray-700 mt-0.5">${formatDate(company.date_creation)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-400 uppercase">Employees</p>
+          <p className="text-sm text-gray-700 mt-0.5">${getEmployeeLabel(company.tranche_effectif_salarie)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-400 uppercase">Establishments</p>
+          <p className="text-sm text-gray-700 mt-0.5">
+            ${company.nombre_etablissements_ouverts || 0} open / ${company.nombre_etablissements || 0} total
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Activity Info Card ──────────────────────────────
+function CompanyInfo({ company }) {
+  return html`
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+      <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-4">Activity</h3>
+      <dl className="space-y-3">
+        <div>
+          <dt className="text-xs text-gray-400">NAF / APE Code</dt>
+          <dd className="text-sm text-gray-700">${company.activite_principale || "N/A"}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-gray-400">Industry Sector</dt>
+          <dd className="text-sm text-gray-700">${getNafSectionLabel(company.section_activite_principale)}</dd>
+        </div>
+        ${company.date_fermeture && html`
+          <div>
+            <dt className="text-xs text-gray-400">Closure Date</dt>
+            <dd className="text-sm text-red-600">${formatDate(company.date_fermeture)}</dd>
+          </div>
+        `}
+      </dl>
+    </div>
+  `;
+}
+
+// ── Siege (HQ) Card ─────────────────────────────────
+function SiegeCard({ siege }) {
+  if (!siege) return null;
+
+  const address = siege.geo_adresse || siege.adresse || "Address not available";
+  const hasCoords = siege.latitude && siege.longitude;
+  const mapsUrl = hasCoords
+    ? "https://www.google.com/maps?q=" + siege.latitude + "," + siege.longitude
+    : null;
+
+  return html`
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+      <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-4">Headquarters</h3>
+      <p className="text-sm text-gray-700">${address}</p>
+      <p className="text-sm text-gray-500 mt-1">
+        ${siege.code_postal || ""} ${siege.libelle_commune || ""}
+      </p>
+      ${siege.departement && html`
+        <p className="text-xs text-gray-400 mt-1">Dept. ${siege.departement} — ${siege.region || ""}</p>
+      `}
+      ${mapsUrl && html`
+        <a href=${mapsUrl} target="_blank" rel="noopener"
+           className="inline-flex items-center gap-1 mt-3 text-sm text-blue-600 hover:text-blue-800">
+          View on Google Maps
+        </a>
+      `}
+    </div>
+  `;
+}
+
+// ── Contact Info Card (Lusha result) ────────────────
+function ContactInfo({ data, error, loading }) {
+  if (loading) {
+    return html`
+      <div className="flex items-center gap-2 py-2 px-3 text-xs text-gray-500">
+        <div className="spinner" style=${{ width: "0.9rem", height: "0.9rem", borderWidth: "2px" }}></div>
+        Searching contact info...
+      </div>
+    `;
+  }
+
+  if (error) {
+    return html`
+      <div className="py-2 px-3 text-xs text-red-500">${error}</div>
+    `;
+  }
+
+  if (!data) return null;
+
+  const emails = data.emails || data.emailAddresses || [];
+  const phones = data.phoneNumbers || data.phones || [];
+
+  if (emails.length === 0 && phones.length === 0) {
+    return html`
+      <div className="py-2 px-3 text-xs text-gray-400">No contact info found</div>
+    `;
+  }
+
+  return html`
+    <div className="py-2 px-3 bg-blue-50 rounded-md">
+      ${emails.length > 0 && html`
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          ${emails.map((e, i) => {
+            const addr = e.email || e.value || e;
+            const conf = e.confidence || e.emailConfidence || "";
+            const etype = e.type || e.emailType || "";
+            return html`
+              <span key=${"e" + i} className="inline-flex items-center gap-1 text-xs text-gray-700">
+                <span className="text-blue-500">@</span>
+                <a href=${"mailto:" + addr} className="text-blue-600 hover:underline">${addr}</a>
+                ${etype && html`<span className="text-gray-400">(${etype})</span>`}
+                ${conf && html`<span className=${"text-xs px-1 rounded " + (conf === "high" ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600")}>${conf}</span>`}
+              </span>
+            `;
+          })}
+        </div>
+      `}
+      ${phones.length > 0 && html`
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+          ${phones.map((p, i) => {
+            const num = p.number || p.internationalNumber || p.localNumber || p;
+            const ptype = p.type || p.phoneType || "";
+            return html`
+              <span key=${"p" + i} className="inline-flex items-center gap-1 text-xs text-gray-700">
+                <span className="text-green-500">T</span>
+                <a href=${"tel:" + num} className="text-gray-800 hover:underline font-mono">${num}</a>
+                ${ptype && html`<span className="text-gray-400">(${ptype})</span>`}
+              </span>
+            `;
+          })}
+        </div>
+      `}
+    </div>
+  `;
+}
+
+// ── Contact Cache (localStorage, per-user) ──────────
+
+function getContactCacheKey(username) {
+  return username ? "lusha_contact_cache_" + username : "lusha_contact_cache";
+}
+
+function getContactCache(username) {
+  try { return JSON.parse(localStorage.getItem(getContactCacheKey(username)) || "{}"); }
+  catch { return {}; }
+}
+
+function getCacheKey(firstName, lastName, company) {
+  return [firstName, lastName, company].join("|").toLowerCase();
+}
+
+function getCachedContact(firstName, lastName, company, username) {
+  const cache = getContactCache(username);
+  return cache[getCacheKey(firstName, lastName, company)] || null;
+}
+
+function saveCachedContact(firstName, lastName, company, result, username) {
+  const cache = getContactCache(username);
+  cache[getCacheKey(firstName, lastName, company)] = {
+    data: result,
+    cachedAt: new Date().toISOString(),
+  };
+  try { localStorage.setItem(getContactCacheKey(username), JSON.stringify(cache)); }
+  catch { /* storage full, ignore */ }
+}
+
+// ── Directors List ──────────────────────────────────
+function DirectorsList({ dirigeants, companyName, username }) {
+  const [showAll, setShowAll] = useState(false);
+  const [enrichment, setEnrichment] = useState({});
+
+  if (!dirigeants || dirigeants.length === 0) {
+    return html`
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+        <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-4">Directors</h3>
+        <p className="text-sm text-gray-400">No directors listed</p>
+      </div>
+    `;
+  }
+
+  // On mount, load any cached results for these directors
+  useEffect(() => {
+    const cached = {};
+    dirigeants.forEach((d, i) => {
+      if (d.type_dirigeant !== "personne physique") return;
+      const firstName = (d.prenoms || "").split(" ")[0];
+      const lastName = (d.nom || "").replace(/\s*\(.*?\)\s*/g, "").trim();
+      if (!firstName || !lastName) return;
+      const entry = getCachedContact(firstName, lastName, companyName || "", username);
+      if (entry) {
+        cached[i] = { loading: false, data: entry.data, error: null, fromCache: true };
+      }
+    });
+    if (Object.keys(cached).length > 0) {
+      setEnrichment(prev => ({ ...prev, ...cached }));
+    }
+  }, [dirigeants, companyName, username]);
+
+  const handleEnrich = (index, director, forceRefresh) => {
+    const firstName = (director.prenoms || "").split(" ")[0];
+    // Strip maiden name in parentheses, e.g. "LANGE (CASTILLON)" -> "LANGE"
+    const lastName = (director.nom || "").replace(/\s*\(.*?\)\s*/g, "").trim();
+    if (!firstName || !lastName) return;
+
+    // Check cache first (unless forcing refresh)
+    if (!forceRefresh) {
+      const entry = getCachedContact(firstName, lastName, companyName || "", username);
+      if (entry) {
+        setEnrichment(prev => ({ ...prev, [index]: { loading: false, data: entry.data, error: null, fromCache: true } }));
+        return;
+      }
+    }
+
+    setEnrichment(prev => ({ ...prev, [index]: { loading: true, data: null, error: null } }));
+
+    enrichWithLusha(firstName, lastName, companyName || "")
+      .then(data => {
+        // Save to cache (even null = "no data" so we don't re-spend credits)
+        saveCachedContact(firstName, lastName, companyName || "", data, username);
+        setEnrichment(prev => ({ ...prev, [index]: { loading: false, data, error: null } }));
+      })
+      .catch(err => {
+        setEnrichment(prev => ({ ...prev, [index]: { loading: false, data: null, error: err.message } }));
+      });
+  };
+
+  const displayed = showAll ? dirigeants : dirigeants.slice(0, 8);
+
+  return html`
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+      <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-4">
+        Directors (${dirigeants.length})
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-left text-xs text-gray-400 uppercase">
+              <th className="pb-2 pr-3">Name</th>
+              <th className="pb-2 pr-3">Role</th>
+              <th className="pb-2 pr-3 hidden sm:table-cell">Type</th>
+              <th className="pb-2 pr-3">Contact</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${displayed.map((d, i) => {
+              const isPerson = d.type_dirigeant === "personne physique";
+              const enrichState = enrichment[i];
+              const hasResult = enrichState && (enrichState.data || enrichState.error);
+              return html`
+                <tr key=${i} className="border-b border-gray-50 align-top">
+                  <td className="py-2 pr-3 text-gray-700">
+                    ${isPerson
+                      ? ((d.prenoms || "") + " " + (d.nom || "")).trim()
+                      : (d.denomination || "N/A")
+                    }
+                    ${isPerson && d.annee_de_naissance
+                      ? html` <span className="text-xs text-gray-400">(${d.annee_de_naissance})</span>`
+                      : null
+                    }
+                    ${enrichState && html`
+                      <div className="mt-1">
+                        <${ContactInfo} loading=${enrichState.loading} data=${enrichState.data} error=${enrichState.error} />
+                      </div>
+                    `}
+                  </td>
+                  <td className="py-2 pr-3 text-gray-500 text-xs">${d.qualite || "N/A"}</td>
+                  <td className="py-2 pr-3 hidden sm:table-cell">
+                    ${isPerson
+                      ? html`<${Badge} label="Individual" bg="bg-green-50" text="text-green-700" />`
+                      : html`<${Badge} label="Legal Entity" bg="bg-yellow-50" text="text-yellow-700" />`
+                    }
+                  </td>
+                  <td className="py-2 pr-3">
+                    ${isPerson && !hasResult && html`
+                      <button
+                        onClick=${() => handleEnrich(i, d, false)}
+                        disabled=${enrichState && enrichState.loading}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors disabled:opacity-50"
+                        title="Find email & phone via Lusha"
+                      >
+                        <span>@</span> Find Contact
+                      </button>
+                    `}
+                    ${isPerson && hasResult && !enrichState.loading && html`
+                      <span className="inline-flex items-center gap-2">
+                        ${enrichState.fromCache && html`<span className="text-xs text-gray-300" title="Loaded from cache — no credit spent">cached</span>`}
+                        <button
+                          onClick=${() => handleEnrich(i, d, true)}
+                          className="text-xs text-gray-400 hover:text-blue-500"
+                          title="Refresh from Lusha (will spend a credit)"
+                        >Refresh</button>
+                      </span>
+                    `}
+                  </td>
+                </tr>
+              `;
+            })}
+          </tbody>
+        </table>
+      </div>
+      ${dirigeants.length > 8 && !showAll && html`
+        <button onClick=${() => setShowAll(true)}
+                className="mt-3 text-sm text-blue-600 hover:text-blue-800">
+          Show all directors (${dirigeants.length})
+        </button>
+      `}
+    </div>
+  `;
+}
+
+// ── Finances Card ───────────────────────────────────
+function FinancesCard({ finances }) {
+  if (!finances || typeof finances !== "object" || Object.keys(finances).length === 0) {
+    return html`
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+        <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-4">Financial Data</h3>
+        <p className="text-sm text-gray-400">No financial data available</p>
+      </div>
+    `;
+  }
+
+  const years = Object.keys(finances).sort().reverse();
+
+  return html`
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+      <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-4">Financial Data</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-left text-xs text-gray-400 uppercase">
+              <th className="pb-2 pr-4">Year</th>
+              <th className="pb-2 pr-4">Revenue</th>
+              <th className="pb-2">Net Income</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${years.map(year => {
+              const f = finances[year];
+              const netClass = f.resultat_net != null
+                ? (f.resultat_net >= 0 ? "text-green-600" : "text-red-600")
+                : "text-gray-400";
+              return html`
+                <tr key=${year} className="border-b border-gray-50">
+                  <td className="py-2 pr-4 font-medium text-gray-700">${year}</td>
+                  <td className="py-2 pr-4 text-gray-600">${f.ca != null ? formatCurrency(f.ca) : "—"}</td>
+                  <td className=${netClass + " py-2"}>
+                    ${f.resultat_net != null ? formatCurrency(f.resultat_net) : "—"}
+                  </td>
+                </tr>
+              `;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ── Complements Badges ──────────────────────────────
+function ComplementsBadges({ complements }) {
+  if (!complements) return null;
+
+  const labels = {
+    est_association: "Association",
+    est_entrepreneur_individuel: "Sole Proprietor",
+    est_ess: "Social Economy (ESS)",
+    est_service_public: "Public Service",
+    est_societe_mission: "Mission-driven Company",
+    est_qualiopi: "Qualiopi Certified",
+    est_rge: "RGE Certified",
+    est_bio: "Organic Certified",
+    est_organisme_formation: "Training Organization",
+    est_siae: "Social Inclusion (SIAE)",
+  };
+
+  const active = Object.entries(labels)
+    .filter(([key]) => complements[key] === true)
+    .map(([, label]) => label);
+
+  if (active.length === 0) return null;
+
+  return html`
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+      <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-4">Labels & Certifications</h3>
+      <div className="flex flex-wrap gap-2">
+        ${active.map(label => html`
+          <${Badge} key=${label} label=${label} bg="bg-indigo-50" text="text-indigo-700" />
+        `)}
+      </div>
+    </div>
+  `;
+}
+
+// ── Company Page (main export) ──────────────────────
+export function CompanyPage({ siren, onNavigate, currentUser }) {
+  const username = currentUser ? currentUser.username : "";
+  const [company, setCompany] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [starred, setStarred] = useState(() => isStarred(siren, username));
+  const abortRef = useRef(null);
+
+  const handleToggleStar = () => {
+    const wasStarred = isStarred(siren, username);
+    const newState = toggleStar(siren, username);
+    logActivity(wasStarred ? "unstar" : "star", siren);
+    setStarred(newState);
+  };
+
+  const fetchCompany = () => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setLoading(true);
+    setError(null);
+
+    getCompanyBySiren(siren, controller.signal)
+      .then(data => {
+        if (!data) {
+          setError("No company found with this SIREN.");
+        } else {
+          setCompany(data);
+        }
+      })
+      .catch(err => {
+        if (err.name === "AbortError") return;
+        setError(err.message || "An error occurred");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchCompany();
+    return () => { if (abortRef.current) abortRef.current.abort(); };
+  }, [siren]);
+
+  return html`
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick=${() => onNavigate("search")}
+          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+        >
+          ← Back to search
+        </button>
+
+        ${!loading && company && html`
+          <div className="flex items-center gap-2">
+            <button
+              onClick=${handleToggleStar}
+              className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border rounded-md transition-colors " + (starred ? "bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100" : "border-gray-300 bg-white hover:bg-gray-50 text-gray-700")}
+              title=${starred ? "Remove star" : "Mark as contacted"}
+            >
+              ${starred ? "\u2605 Contacted" : "\u2606 Mark contacted"}
+            </button>
+            <button
+              onClick=${() => { exportToCSV(company); logActivity("export", company.siren + " CSV"); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-md bg-white hover:bg-gray-50 text-gray-700 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+              CSV
+            </button>
+            <button
+              onClick=${() => { exportToJSON(company); logActivity("export", company.siren + " JSON"); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-md bg-white hover:bg-gray-50 text-gray-700 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+              JSON
+            </button>
+            <button
+              onClick=${() => window.print()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-md bg-white hover:bg-gray-50 text-gray-700 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
+              </svg>
+              Print
+            </button>
+          </div>
+        `}
+      </div>
+
+      ${loading && html`<${LoadingSpinner} message="Loading company data..." />`}
+      ${error && html`<${ErrorMessage} message=${error} onRetry=${fetchCompany} />`}
+
+      ${!loading && company && html`
+        <div>
+          <${CompanyHeader} company=${company} />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <${CompanyInfo} company=${company} />
+            <${SiegeCard} siege=${company.siege} />
+          </div>
+
+          <div className="mt-6">
+            <${DirectorsList} dirigeants=${company.dirigeants} companyName=${company.nom_complet} username=${username} />
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <${FinancesCard} finances=${company.finances} />
+            <${ComplementsBadges} complements=${company.complements} />
+          </div>
+        </div>
+      `}
+    </div>
+  `;
+}

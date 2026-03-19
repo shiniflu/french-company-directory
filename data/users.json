@@ -1,0 +1,16 @@
+{
+  "admin": {
+    "password_hash": "4261e03c5aeabf8b2e5aab52faa87e710a4e317d28cae3fc07defc952392690f",
+    "salt": "63b83d6f8b0d83e0f4a3bbfc2560e256",
+    "role": "admin",
+    "created_at": "2026-03-18T14:48:25.320266",
+    "created_by": "system"
+  },
+  "manager1": {
+    "password_hash": "d8416e28818ab74ee05b90fca9978e0ae6f7f500fe90ae1a7be6c6ff361635de",
+    "salt": "b341e8a7ab34e5b5daf9629ea1a1c7de",
+    "role": "manager",
+    "created_at": "2026-03-18T14:49:27.977255",
+    "created_by": "admin"
+  }
+}

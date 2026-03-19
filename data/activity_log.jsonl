@@ -1,0 +1,9 @@
+{"ts": "2026-03-18T14:48:49.419398", "user": "admin", "action": "login", "detail": ""}
+{"ts": "2026-03-18T14:49:27.978260", "user": "admin", "action": "create_user", "detail": "manager1 (manager)"}
+{"ts": "2026-03-18T14:49:42.718750", "user": "admin", "action": "logout", "detail": ""}
+{"ts": "2026-03-18T14:49:59.139516", "user": "manager1", "action": "login", "detail": ""}
+{"ts": "2026-03-18T14:51:16.339848", "user": "manager1", "action": "logout", "detail": ""}
+{"ts": "2026-03-18T14:51:16.344653", "user": "admin", "action": "login", "detail": ""}
+{"ts": "2026-03-18T15:35:54.176520", "user": "admin", "action": "login", "detail": ""}
+{"ts": "2026-03-19T09:47:48.116111", "user": "admin", "action": "login", "detail": ""}
+{"ts": "2026-03-19T09:48:24.635489", "user": "manager1", "action": "login", "detail": ""}

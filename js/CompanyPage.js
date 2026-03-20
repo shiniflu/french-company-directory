@@ -1,13 +1,21 @@
 import { createElement, useState, useEffect, useRef } from "react";
 import htm from "htm";
-import { getCompanyBySiren, enrichWithLusha, logActivity } from "./api.js?v=8";
+import { getCompanyBySiren, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact } from "./api.js?v=9";
 import { formatSiren, formatSiret, formatCurrency, formatDate, getEmployeeLabel,
          getLegalFormLabel, getNafSectionLabel, getLatestFinance,
          CATEGORY_STYLES, exportToCSV, exportToJSON,
-         isStarred, toggleStar } from "./utils.js?v=8";
-import { LoadingSpinner, ErrorMessage, Badge, StatusDot } from "./components.js?v=8";
+         isStarred, toggleStar } from "./utils.js?v=9";
+import { LoadingSpinner, ErrorMessage, Badge, StatusDot } from "./components.js?v=9";
 
 const html = htm.bind(createElement);
+
+// ── CFO keyword matching ────────────────────────────
+const CFO_KEYWORDS = ["financ", "cfo", "trésor", "tresor", "comptab", "daf"];
+function isCfoRole(qualite) {
+  if (!qualite) return false;
+  const lower = qualite.toLowerCase();
+  return CFO_KEYWORDS.some(kw => lower.includes(kw));
+}
 
 // ── Company Header ──────────────────────────────────
 function CompanyHeader({ company }) {
@@ -437,6 +445,256 @@ function DirectorsList({ dirigeants, companyName, username }) {
   `;
 }
 
+// ── CFO Section (server-cached) ─────────────────────
+function CfoSection({ siren, companyName, dirigeants, username }) {
+  const [cfoData, setCfoData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const [searchStatus, setSearchStatus] = useState("");
+  const [error, setError] = useState(null);
+  const [showManual, setShowManual] = useState(false);
+  const [manualFirst, setManualFirst] = useState("");
+  const [manualLast, setManualLast] = useState("");
+
+  // On mount: check server cache
+  useEffect(() => {
+    let cancelled = false;
+    getCfoContact(siren)
+      .then(data => { if (!cancelled) setCfoData(data); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [siren]);
+
+  // Find directors with CFO-like roles
+  const cfoDirectors = (dirigeants || []).filter(d =>
+    d.type_dirigeant === "personne physique" && isCfoRole(d.qualite)
+  );
+
+  // Core: enrich via Lusha → optionally Kaspr → save server-side
+  const enrichAndSave = async (firstName, lastName, title) => {
+    setSearching(true);
+    setError(null);
+    setSearchStatus("Searching via Lusha...");
+    try {
+      let lushaData = null;
+      try {
+        lushaData = await enrichWithLusha(firstName, lastName, companyName || "");
+      } catch (e) { /* Lusha failed, continue */ }
+
+      let phones = [];
+      let emails = [];
+      let linkedin = "";
+      let source = "lusha";
+
+      if (lushaData) {
+        emails = lushaData.emails || lushaData.emailAddresses || [];
+        phones = lushaData.phoneNumbers || lushaData.phones || [];
+        const sn = lushaData.socialNetworks || lushaData.social || [];
+        linkedin = lushaData.linkedinUrl || lushaData.linkedin_url
+          || (Array.isArray(sn) ? ((sn.find(s => s.type === "linkedin" || s.label === "linkedin")) || {}).url : null)
+          || (typeof sn === "object" && !Array.isArray(sn) ? sn.linkedin : null)
+          || "";
+      }
+
+      // If LinkedIn found but no mobile → try Kaspr
+      const hasMobile = phones.some(p => {
+        const pt = (p.type || p.phoneType || "").toLowerCase();
+        return pt.includes("mobile") || pt.includes("cell");
+      });
+      if (linkedin && !hasMobile) {
+        setSearchStatus("Searching via Kaspr for mobile...");
+        try {
+          const kasprData = await enrichWithKaspr(firstName + " " + lastName, linkedin);
+          if (kasprData) {
+            const kp = kasprData.phoneNumbers || kasprData.phones || [];
+            if (kp.length > 0) { phones = [...phones, ...kp]; source = "lusha+kaspr"; }
+            if (emails.length === 0) { emails = kasprData.emails || kasprData.emailAddresses || []; }
+          }
+        } catch (e) { /* Kaspr failed, proceed with Lusha data */ }
+      }
+
+      // Save to server
+      setSearchStatus("Saving CFO contact...");
+      const saved = await saveCfoContact(siren, {
+        firstName, lastName, title: title || "CFO",
+        phones, emails, linkedin, source,
+        company_name: companyName || "",
+      });
+      setCfoData(saved);
+      setShowManual(false);
+      logActivity("cfo_found", siren + " " + firstName + " " + lastName);
+    } catch (e) {
+      setError("Search failed: " + e.message);
+    } finally {
+      setSearching(false);
+      setSearchStatus("");
+    }
+  };
+
+  // Auto-search: try first CFO-like director
+  const handleAutoSearch = async () => {
+    for (const d of cfoDirectors) {
+      const firstName = (d.prenoms || "").split(" ")[0];
+      const lastName = (d.nom || "").replace(/\s*\(.*?\)\s*/g, "").trim();
+      if (firstName && lastName) { await enrichAndSave(firstName, lastName, d.qualite); return; }
+    }
+  };
+
+  const handleManualSearch = () => {
+    if (!manualFirst.trim() || !manualLast.trim()) return;
+    enrichAndSave(manualFirst.trim(), manualLast.trim(), "CFO");
+  };
+
+  const linkedinSearchUrl = "https://www.linkedin.com/search/results/people/?keywords="
+    + encodeURIComponent("CFO " + (companyName || ""));
+
+  if (loading) {
+    return html`
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+        <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">💰 CFO Contact</h3>
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <div className="spinner" style=${{ width: "0.9rem", height: "0.9rem", borderWidth: "2px" }}></div>
+          Checking for saved CFO...
+        </div>
+      </div>
+    `;
+  }
+
+  return html`
+    <div className="bg-white rounded-lg shadow-sm border border-emerald-200 p-5">
+      <h3 className="text-sm font-semibold text-emerald-800 uppercase tracking-wide mb-4">💰 CFO Contact</h3>
+
+      ${cfoData && html`
+        <div className="bg-emerald-50 rounded-md p-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="font-semibold text-gray-900 text-lg">${cfoData.firstName} ${cfoData.lastName}</p>
+              <p className="text-xs text-gray-500 mt-0.5">${cfoData.title || "CFO"}</p>
+            </div>
+            <div className="text-right text-xs text-gray-400">
+              <p>Found by <span className="font-medium text-gray-600">${cfoData.found_by}</span></p>
+              <p>${cfoData.found_at ? new Date(cfoData.found_at).toLocaleDateString() : ""}</p>
+              <p className="text-emerald-600 font-semibold mt-1">✓ Free (cached)</p>
+            </div>
+          </div>
+          ${cfoData.phones && cfoData.phones.length > 0 && html`
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+              ${cfoData.phones.map((p, i) => {
+                const num = p.number || p.internationalNumber || p.localNumber || p;
+                const pt = p.type || p.phoneType || "";
+                return html`
+                  <span key=${"p" + i} className="inline-flex items-center gap-1.5 text-sm">
+                    <span className="text-green-600 font-bold">📱</span>
+                    <a href=${"tel:" + num} className="text-gray-800 hover:underline font-mono font-medium">${num}</a>
+                    ${pt && html`<span className="text-gray-400 text-xs">(${pt})</span>`}
+                  </span>
+                `;
+              })}
+            </div>
+          `}
+          ${cfoData.emails && cfoData.emails.length > 0 && html`
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+              ${cfoData.emails.map((e, i) => {
+                const addr = e.email || e.value || e;
+                return html`
+                  <span key=${"e" + i} className="inline-flex items-center gap-1 text-sm">
+                    <span className="text-blue-500">@</span>
+                    <a href=${"mailto:" + addr} className="text-blue-600 hover:underline">${addr}</a>
+                  </span>
+                `;
+              })}
+            </div>
+          `}
+          ${cfoData.linkedin && html`
+            <div className="mt-2">
+              <a href=${cfoData.linkedin} target="_blank" rel="noopener noreferrer"
+                 className="inline-flex items-center gap-1.5 text-sm text-sky-700 hover:text-sky-900 hover:underline font-medium">
+                <${LinkedInIcon} className="h-4 w-4" />
+                LinkedIn Profile
+              </a>
+            </div>
+          `}
+        </div>
+      `}
+
+      ${!cfoData && !searching && html`
+        <div className="space-y-3">
+          ${cfoDirectors.length > 0 && html`
+            <div className="bg-blue-50 rounded-md p-3">
+              <p className="text-xs text-blue-600 mb-2">
+                Found ${cfoDirectors.length} director(s) with finance-related roles:
+              </p>
+              <ul className="text-sm text-gray-700 space-y-1 mb-3">
+                ${cfoDirectors.map((d, i) => html`
+                  <li key=${i} className="flex items-center gap-2">
+                    <span className="font-medium">${(d.prenoms || "").split(" ")[0]} ${(d.nom || "").replace(/\s*\(.*?\)\s*/g, "").trim()}</span>
+                    <span className="text-xs text-gray-400">— ${d.qualite}</span>
+                  </li>
+                `)}
+              </ul>
+              <button onClick=${handleAutoSearch}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors">
+                🔍 Find CFO Contact
+              </button>
+            </div>
+          `}
+
+          <div className="flex flex-wrap items-center gap-3 ${cfoDirectors.length === 0 ? '' : 'pt-1'}">
+            <a href=${linkedinSearchUrl} target="_blank" rel="noopener noreferrer"
+               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-sky-700 bg-sky-50 rounded-full hover:bg-sky-100 transition-colors">
+              <${LinkedInIcon} className="h-3.5 w-3.5" />
+              Search CFO on LinkedIn
+            </a>
+            <button onClick=${() => setShowManual(!showManual)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
+              ✏️ Enter name manually
+            </button>
+          </div>
+
+          ${showManual && html`
+            <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
+              <p className="text-xs text-gray-500 mb-3">
+                Enter the CFO's name (found from LinkedIn). The system will search Lusha/Kaspr for their contact info and save it for all users.
+              </p>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-[120px]">
+                  <label className="block text-xs text-gray-500 mb-1">First Name</label>
+                  <input type="text" value=${manualFirst} onInput=${(e) => setManualFirst(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                    placeholder="Jean" />
+                </div>
+                <div className="flex-1 min-w-[120px]">
+                  <label className="block text-xs text-gray-500 mb-1">Last Name</label>
+                  <input type="text" value=${manualLast} onInput=${(e) => setManualLast(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                    placeholder="Dupont" />
+                </div>
+                <button onClick=${handleManualSearch}
+                  disabled=${!manualFirst.trim() || !manualLast.trim()}
+                  className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors disabled:opacity-50">
+                  Search & Save
+                </button>
+              </div>
+            </div>
+          `}
+        </div>
+      `}
+
+      ${searching && html`
+        <div className="flex items-center gap-2 py-3 text-sm text-gray-500">
+          <div className="spinner" style=${{ width: "0.9rem", height: "0.9rem", borderWidth: "2px" }}></div>
+          ${searchStatus || "Searching..."}
+        </div>
+      `}
+
+      ${error && html`
+        <div className="mt-3 py-2 px-3 text-xs text-red-500 bg-red-50 rounded-md">${error}</div>
+      `}
+    </div>
+  `;
+}
+
 // ── Finances Card ───────────────────────────────────
 function FinancesCard({ finances }) {
   if (!finances || typeof finances !== "object" || Object.keys(finances).length === 0) {
@@ -630,6 +888,10 @@ export function CompanyPage({ siren, onNavigate, currentUser }) {
 
           <div className="mt-6">
             <${DirectorsList} dirigeants=${company.dirigeants} companyName=${company.nom_complet} username=${username} />
+          </div>
+
+          <div className="mt-6">
+            <${CfoSection} siren=${company.siren} companyName=${company.nom_complet} dirigeants=${company.dirigeants} username=${username} />
           </div>
 
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">

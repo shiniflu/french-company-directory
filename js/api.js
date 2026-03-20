@@ -1,4 +1,4 @@
-import { getToken } from "./auth.js?v=8";
+import { getToken } from "./auth.js?v=9";
 
 const BASE_URL = "https://recherche-entreprises.api.gouv.fr";
 
@@ -154,6 +154,48 @@ export async function enrichWithKaspr(name, linkedinId, signal) {
 
   if (!response.ok) {
     throw new Error(data.error || "Kaspr API error (" + response.status + ")");
+  }
+  return data;
+}
+
+// ── CFO Contact (server-side cache) ─────────────────
+
+/**
+ * Get cached CFO contact for a company from server.
+ * @param {string} siren - 9-digit SIREN
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<Object|null>} CFO contact data or null if not found
+ */
+export async function getCfoContact(siren, signal) {
+  const response = await fetch("/api/cfo/" + encodeURIComponent(siren), {
+    signal,
+    headers: authHeaders(),
+  });
+  if (response.status === 404) return null;
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to fetch CFO contact");
+  }
+  return data;
+}
+
+/**
+ * Save CFO contact for a company to server.
+ * @param {string} siren - 9-digit SIREN
+ * @param {Object} contactData - CFO data to save
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<Object>} Saved CFO contact
+ */
+export async function saveCfoContact(siren, contactData, signal) {
+  const response = await fetch("/api/cfo/" + encodeURIComponent(siren), {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(contactData),
+    signal,
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to save CFO contact");
   }
   return data;
 }

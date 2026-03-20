@@ -1,6 +1,6 @@
 import { createElement, useState, useEffect, useCallback } from "react";
 import htm from "htm";
-import { authFetch } from "./auth.js?v=8";
+import { authFetch } from "./auth.js?v=9";
 
 const html = htm.bind(createElement);
 
@@ -379,6 +379,9 @@ function getActionBadgeClass(action) {
     case "bulk_export": return base + "bg-orange-100 text-orange-700";
     case "create_user": return base + "bg-purple-100 text-purple-700";
     case "delete_user": return base + "bg-red-100 text-red-700";
+    case "cfo_save":
+    case "cfo_found": return base + "bg-emerald-100 text-emerald-700";
+    case "cfo_delete": return base + "bg-red-100 text-red-700";
     default: return base + "bg-gray-100 text-gray-600";
   }
 }

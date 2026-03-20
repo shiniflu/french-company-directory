@@ -1,11 +1,11 @@
 import { createElement, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import htm from "htm";
-import { searchCompanies, logActivity } from "./api.js?v=8";
+import { searchCompanies, logActivity } from "./api.js?v=9";
 import { formatSiren, formatCurrency, getEmployeeLabel, getLatestFinance,
          CATEGORY_STYLES, EMPLOYEE_FILTER_OPTIONS,
          INDUSTRY_FILTER_OPTIONS, TURNOVER_FILTER_OPTIONS,
-         isStarred, toggleStar, starMultiple, bulkExportToCSV } from "./utils.js?v=8";
-import { LoadingSpinner, ErrorMessage, Badge, StatusDot, EmptyState } from "./components.js?v=8";
+         isStarred, toggleStar, starMultiple, bulkExportToCSV } from "./utils.js?v=9";
+import { LoadingSpinner, ErrorMessage, Badge, StatusDot, EmptyState } from "./components.js?v=9";
 
 const html = htm.bind(createElement);
 

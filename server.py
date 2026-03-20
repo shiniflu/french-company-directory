@@ -25,6 +25,7 @@ PORT = int(os.environ.get("PORT", 8080))
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 ACTIVITY_LOG = os.path.join(DATA_DIR, "activity_log.jsonl")
+CFO_CONTACTS_FILE = os.path.join(DATA_DIR, "cfo_contacts.json")
 
 # Allow unverified SSL for proxied requests (some corporate networks)
 ssl_ctx = ssl.create_default_context()
@@ -50,6 +51,19 @@ def save_users(users):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(USERS_FILE, "w", encoding="utf-8") as f:
         json.dump(users, f, indent=2, ensure_ascii=False)
+
+def load_cfo_contacts():
+    """Load CFO contacts from JSON file."""
+    if not os.path.exists(CFO_CONTACTS_FILE):
+        return {}
+    with open(CFO_CONTACTS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_cfo_contacts(contacts):
+    """Save CFO contacts to JSON file."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(CFO_CONTACTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(contacts, f, indent=2, ensure_ascii=False)
 
 def hash_password(password, salt=None):
     """Hash password with SHA-256 + salt. Returns (hash, salt)."""
@@ -175,6 +189,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/api/lusha"):
             self.handle_lusha()
+        elif self.path.startswith("/api/cfo/"):
+            self.handle_cfo_get()
         elif self.path == "/api/auth/me":
             self.handle_auth_me()
         elif self.path == "/api/admin/users":
@@ -187,6 +203,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/kaspr":
             self.handle_kaspr()
+        elif self.path.startswith("/api/cfo/"):
+            self.handle_cfo_save()
         elif self.path == "/api/auth/login":
             self.handle_auth_login()
         elif self.path == "/api/auth/logout":
@@ -201,6 +219,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
     def do_DELETE(self):
         if self.path.startswith("/api/admin/users/"):
             self.handle_admin_delete_user()
+        elif self.path.startswith("/api/cfo/"):
+            self.handle_cfo_delete()
         else:
             self.send_error(404)
 
@@ -390,6 +410,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
         stars_by_day = {}
         lusha_by_user = {}
         kaspr_by_user = {}
+        cfo_by_user = {}
 
         for e in entries:
             action = e.get("action", "")
@@ -403,13 +424,82 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                 lusha_by_user[user] = lusha_by_user.get(user, 0) + 1
             elif action == "kaspr_lookup":
                 kaspr_by_user[user] = kaspr_by_user.get(user, 0) + 1
+            elif action == "cfo_save":
+                cfo_by_user[user] = cfo_by_user.get(user, 0) + 1
 
         self.send_json(200, {
             "stars_by_day": stars_by_day,
             "lusha_by_user": lusha_by_user,
             "kaspr_by_user": kaspr_by_user,
+            "cfo_by_user": cfo_by_user,
             "recent_activity": entries[:50],
         })
+
+    # ── CFO Contact endpoints ──────────────────────────
+
+    def handle_cfo_get(self):
+        """GET /api/cfo/<siren> -> return cached CFO contact or 404"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        siren = self.path.split("/api/cfo/")[1].split("?")[0].strip()
+        contacts = load_cfo_contacts()
+        if siren in contacts:
+            self.send_json(200, contacts[siren])
+        else:
+            self.send_json(404, {"error": "No CFO contact found"})
+
+    def handle_cfo_save(self):
+        """POST /api/cfo/<siren> { firstName, lastName, title, phones, emails, linkedin, source, company_name }"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        siren = self.path.split("/api/cfo/")[1].split("?")[0].strip()
+        try:
+            body = self.read_body()
+            first_name = body.get("firstName", "").strip()
+            last_name = body.get("lastName", "").strip()
+            if not first_name or not last_name:
+                self.send_json(400, {"error": "firstName and lastName are required"})
+                return
+            contacts = load_cfo_contacts()
+            contacts[siren] = {
+                "firstName": first_name,
+                "lastName": last_name,
+                "title": body.get("title", "CFO"),
+                "phones": body.get("phones", []),
+                "emails": body.get("emails", []),
+                "linkedin": body.get("linkedin", ""),
+                "source": body.get("source", "manual"),
+                "found_by": auth_user["username"],
+                "found_at": datetime.datetime.now().isoformat(),
+                "company_name": body.get("company_name", ""),
+            }
+            save_cfo_contacts(contacts)
+            log_activity(auth_user["username"], "cfo_save",
+                         f"{first_name} {last_name} @ {siren}")
+            self.send_json(200, contacts[siren])
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
+
+    def handle_cfo_delete(self):
+        """DELETE /api/cfo/<siren> -> remove cached CFO (admin only)"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        if auth_user["role"] != "admin":
+            self.send_json(403, {"error": "Admin access required"})
+            return
+        siren = self.path.split("/api/cfo/")[1].split("?")[0].strip()
+        contacts = load_cfo_contacts()
+        if siren in contacts:
+            del contacts[siren]
+            save_cfo_contacts(contacts)
+            log_activity(auth_user["username"], "cfo_delete", siren)
+        self.send_json(200, {"ok": True})
 
     # ── Activity logging endpoint ─────────────────────
 

@@ -1,11 +1,11 @@
 import { createElement, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import htm from "htm";
-import { searchCompanies, logActivity } from "./api.js?v=10";
+import { searchCompanies, logActivity, getFlaggedCompanies, flagCompany, unflagCompany } from "./api.js?v=11";
 import { formatSiren, formatCurrency, getEmployeeLabel, getLatestFinance,
          CATEGORY_STYLES, EMPLOYEE_FILTER_OPTIONS,
          INDUSTRY_FILTER_OPTIONS, TURNOVER_FILTER_OPTIONS,
-         isStarred, toggleStar, starMultiple, bulkExportToCSV } from "./utils.js?v=10";
-import { LoadingSpinner, ErrorMessage, Badge, StatusDot, EmptyState } from "./components.js?v=10";
+         isStarred, toggleStar, starMultiple, bulkExportToCSV } from "./utils.js?v=11";
+import { LoadingSpinner, ErrorMessage, Badge, StatusDot, EmptyState } from "./components.js?v=11";
 
 const html = htm.bind(createElement);
 
@@ -175,12 +175,13 @@ function SearchFilters({ filters, onChange, onReset }) {
 }
 
 // ── Results Table ───────────────────────────────────
-function ResultsTable({ results, onCompanyClick, starVersion, onToggleStar, username }) {
+function ResultsTable({ results, onCompanyClick, starVersion, onToggleStar, username, flaggedSirens, onToggleFlag }) {
   return html`
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b-2 border-gray-200 text-left text-gray-500 text-xs uppercase tracking-wider">
+            <th className="py-3 px-2 w-10"></th>
             <th className="py-3 px-2 w-10"></th>
             <th className="py-3 px-3">Company</th>
             <th className="py-3 px-3">SIREN</th>
@@ -205,6 +206,16 @@ function ResultsTable({ results, onCompanyClick, starVersion, onToggleStar, user
                     className=${"text-lg hover:scale-110 transition-transform " + (starred ? "text-yellow-400" : "text-gray-300 hover:text-yellow-300")}
                     title=${starred ? "Remove star" : "Mark as contacted"}
                   >${starred ? "\u2605" : "\u2606"}</button>
+                </td>
+                <td className="py-3 px-2 text-center">
+                  <button
+                    onClick=${(e) => { e.stopPropagation(); onToggleFlag(company.siren, company); }}
+                    className=${"text-lg hover:scale-110 transition-transform " +
+                      (flaggedSirens && flaggedSirens[company.siren]
+                        ? "text-red-500"
+                        : "text-gray-300 hover:text-red-300")}
+                    title=${flaggedSirens && flaggedSirens[company.siren] ? "Remove flag" : "Flag company"}
+                  >${flaggedSirens && flaggedSirens[company.siren] ? "\u2691" : "\u2690"}</button>
                 </td>
                 <td className="py-3 px-3">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -335,7 +346,15 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
   const [loadingProgress, setLoadingProgress] = useState("");
   const [error, setError] = useState(null);
   const [starVersion, setStarVersion] = useState(0);
+  const [flaggedSirens, setFlaggedSirens] = useState({});
   const abortRef = useRef(null);
+
+  // Load flagged companies from server (shared)
+  useEffect(() => {
+    getFlaggedCompanies()
+      .then(data => setFlaggedSirens(data))
+      .catch(() => {});
+  }, []);
 
   // Persist search state for back-navigation
   useEffect(() => {
@@ -455,6 +474,31 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
     setStarVersion(v => v + 1);
   };
 
+  const handleToggleFlag = async (siren, companyData) => {
+    const wasFlagged = !!flaggedSirens[siren];
+    try {
+      if (wasFlagged) {
+        await unflagCompany(siren);
+        setFlaggedSirens(prev => {
+          const next = { ...prev };
+          delete next[siren];
+          return next;
+        });
+      } else {
+        const metadata = {
+          company_name: companyData.nom_complet || "",
+          categorie_entreprise: companyData.categorie_entreprise || "",
+          siege_commune: companyData.siege ? (companyData.siege.libelle_commune || "") : "",
+          siege_code_postal: companyData.siege ? (companyData.siege.code_postal || "") : "",
+        };
+        const result = await flagCompany(siren, metadata);
+        setFlaggedSirens(prev => ({ ...prev, [siren]: result }));
+      }
+    } catch (err) {
+      console.error("Flag toggle failed:", err);
+    }
+  };
+
   // Sort all results (memoized to avoid re-sorting on every render)
   const sortedResults = useMemo(() => {
     if (!allResults) return null;
@@ -554,6 +598,8 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
                   starVersion=${starVersion}
                   onToggleStar=${handleToggleStar}
                   username=${username}
+                  flaggedSirens=${flaggedSirens}
+                  onToggleFlag=${handleToggleFlag}
                 />
               </div>
               <${Pagination}

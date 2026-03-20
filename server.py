@@ -26,6 +26,7 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 ACTIVITY_LOG = os.path.join(DATA_DIR, "activity_log.jsonl")
 CFO_CONTACTS_FILE = os.path.join(DATA_DIR, "cfo_contacts.json")
+FLAGGED_COMPANIES_FILE = os.path.join(DATA_DIR, "flagged_companies.json")
 
 # Allow unverified SSL for proxied requests (some corporate networks)
 ssl_ctx = ssl.create_default_context()
@@ -64,6 +65,19 @@ def save_cfo_contacts(contacts):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(CFO_CONTACTS_FILE, "w", encoding="utf-8") as f:
         json.dump(contacts, f, indent=2, ensure_ascii=False)
+
+def load_flagged_companies():
+    """Load flagged companies from JSON file."""
+    if not os.path.exists(FLAGGED_COMPANIES_FILE):
+        return {}
+    with open(FLAGGED_COMPANIES_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_flagged_companies(flagged):
+    """Save flagged companies to JSON file."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(FLAGGED_COMPANIES_FILE, "w", encoding="utf-8") as f:
+        json.dump(flagged, f, indent=2, ensure_ascii=False)
 
 def hash_password(password, salt=None):
     """Hash password with SHA-256 + salt. Returns (hash, salt)."""
@@ -191,6 +205,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_lusha()
         elif self.path.startswith("/api/cfo/"):
             self.handle_cfo_get()
+        elif self.path == "/api/flagged":
+            self.handle_flagged_list()
         elif self.path == "/api/auth/me":
             self.handle_auth_me()
         elif self.path == "/api/admin/users":
@@ -205,6 +221,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_kaspr()
         elif self.path.startswith("/api/cfo/"):
             self.handle_cfo_save()
+        elif self.path.startswith("/api/flagged/"):
+            self.handle_flagged_add()
         elif self.path == "/api/auth/login":
             self.handle_auth_login()
         elif self.path == "/api/auth/logout":
@@ -221,6 +239,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_admin_delete_user()
         elif self.path.startswith("/api/cfo/"):
             self.handle_cfo_delete()
+        elif self.path.startswith("/api/flagged/"):
+            self.handle_flagged_remove()
         else:
             self.send_error(404)
 
@@ -427,11 +447,13 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             elif action == "cfo_save":
                 cfo_by_user[user] = cfo_by_user.get(user, 0) + 1
 
+        flagged = load_flagged_companies()
         self.send_json(200, {
             "stars_by_day": stars_by_day,
             "lusha_by_user": lusha_by_user,
             "kaspr_by_user": kaspr_by_user,
             "cfo_by_user": cfo_by_user,
+            "flagged_count": len(flagged),
             "recent_activity": entries[:50],
         })
 
@@ -499,6 +521,60 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             del contacts[siren]
             save_cfo_contacts(contacts)
             log_activity(auth_user["username"], "cfo_delete", siren)
+        self.send_json(200, {"ok": True})
+
+    # ── Flagged Companies endpoints ─────────────────────
+
+    def handle_flagged_list(self):
+        """GET /api/flagged -> return all flagged companies (auth required)"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        flagged = load_flagged_companies()
+        self.send_json(200, {"flagged": flagged})
+
+    def handle_flagged_add(self):
+        """POST /api/flagged/<siren> { company_name, ... } -> flag a company"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        siren = self.path.split("/api/flagged/")[1].split("?")[0].strip()
+        try:
+            body = self.read_body()
+            flagged = load_flagged_companies()
+            flagged[siren] = {
+                "siren": siren,
+                "company_name": body.get("company_name", ""),
+                "flagged_by": auth_user["username"],
+                "flagged_at": datetime.datetime.now().isoformat(),
+                "categorie_entreprise": body.get("categorie_entreprise", ""),
+                "siege_commune": body.get("siege_commune", ""),
+                "siege_code_postal": body.get("siege_code_postal", ""),
+            }
+            save_flagged_companies(flagged)
+            log_activity(auth_user["username"], "flag_company",
+                         f"{body.get('company_name', '')} ({siren})")
+            self.send_json(200, flagged[siren])
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
+
+    def handle_flagged_remove(self):
+        """DELETE /api/flagged/<siren> -> unflag a company (any user can unflag)"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        siren = self.path.split("/api/flagged/")[1].split("?")[0].strip()
+        flagged = load_flagged_companies()
+        company_name = ""
+        if siren in flagged:
+            company_name = flagged[siren].get("company_name", "")
+            del flagged[siren]
+            save_flagged_companies(flagged)
+        log_activity(auth_user["username"], "unflag_company",
+                     f"{company_name} ({siren})")
         self.send_json(200, {"ok": True})
 
     # ── Activity logging endpoint ─────────────────────

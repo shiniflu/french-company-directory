@@ -1,12 +1,13 @@
 import { createElement, useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import htm from "htm";
-import { Header, Footer } from "./components.js?v=10";
-import { SearchPage } from "./SearchPage.js?v=10";
-import { CompanyPage } from "./CompanyPage.js?v=10";
-import { LoginPage } from "./LoginPage.js?v=10";
-import { AdminPage } from "./AdminPage.js?v=10";
-import { getUser, logout, validateSession } from "./auth.js?v=10";
+import { Header, Footer } from "./components.js?v=11";
+import { SearchPage } from "./SearchPage.js?v=11";
+import { CompanyPage } from "./CompanyPage.js?v=11";
+import { LoginPage } from "./LoginPage.js?v=11";
+import { AdminPage } from "./AdminPage.js?v=11";
+import { FlaggedPage } from "./FlaggedPage.js?v=11";
+import { getUser, logout, validateSession } from "./auth.js?v=11";
 
 const html = htm.bind(createElement);
 
@@ -20,6 +21,9 @@ function parseHash(hash) {
   }
   if (path === "admin") {
     return { page: "admin" };
+  }
+  if (path === "flagged") {
+    return { page: "flagged" };
   }
   return { page: "search" };
 }
@@ -38,6 +42,8 @@ function useHashRouter() {
       window.location.hash = "#/company/" + param;
     } else if (page === "admin") {
       window.location.hash = "#/admin";
+    } else if (page === "flagged") {
+      window.location.hash = "#/flagged";
     } else if (page === "login") {
       window.location.hash = "#/login";
     } else {
@@ -131,6 +137,19 @@ function App() {
         <${Header} currentUser=${currentUser} onLogout=${handleLogout} onNavigate=${navigate} />
         <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
           <${AdminPage} currentUser=${currentUser} onNavigate=${navigate} />
+        </main>
+        <${Footer} />
+      </div>
+    `;
+  }
+
+  // Flagged companies page (all logged-in users)
+  if (route.page === "flagged") {
+    return html`
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <${Header} currentUser=${currentUser} onLogout=${handleLogout} onNavigate=${navigate} />
+        <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
+          <${FlaggedPage} currentUser=${currentUser} onNavigate=${navigate} />
         </main>
         <${Footer} />
       </div>

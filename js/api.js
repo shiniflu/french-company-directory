@@ -1,4 +1,4 @@
-import { getToken } from "./auth.js?v=10";
+import { getToken } from "./auth.js?v=11";
 
 const BASE_URL = "https://recherche-entreprises.api.gouv.fr";
 
@@ -196,6 +196,63 @@ export async function saveCfoContact(siren, contactData, signal) {
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data.error || "Failed to save CFO contact");
+  }
+  return data;
+}
+
+// ── Flagged Companies (server-side shared) ──────────
+
+/**
+ * Get all flagged companies from server.
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<Object>} { siren: { ... }, ... }
+ */
+export async function getFlaggedCompanies(signal) {
+  const response = await fetch("/api/flagged", {
+    signal,
+    headers: authHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to fetch flagged companies");
+  }
+  return data.flagged || {};
+}
+
+/**
+ * Flag a company (shared, server-side).
+ * @param {string} siren
+ * @param {Object} metadata - { company_name, categorie_entreprise, siege_commune, siege_code_postal }
+ * @param {AbortSignal} [signal]
+ */
+export async function flagCompany(siren, metadata, signal) {
+  const response = await fetch("/api/flagged/" + encodeURIComponent(siren), {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(metadata),
+    signal,
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to flag company");
+  }
+  return data;
+}
+
+/**
+ * Unflag a company.
+ * @param {string} siren
+ * @param {AbortSignal} [signal]
+ */
+export async function unflagCompany(siren, signal) {
+  const response = await fetch("/api/flagged/" + encodeURIComponent(siren), {
+    method: "DELETE",
+    headers: authHeaders(),
+    signal,
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to unflag company");
   }
   return data;
 }

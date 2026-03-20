@@ -1,11 +1,11 @@
 import { createElement, useState, useEffect, useRef } from "react";
 import htm from "htm";
-import { getCompanyBySiren, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact } from "./api.js?v=10";
+import { getCompanyBySiren, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany } from "./api.js?v=11";
 import { formatSiren, formatSiret, formatCurrency, formatDate, getEmployeeLabel,
          getLegalFormLabel, getNafSectionLabel, getLatestFinance,
          CATEGORY_STYLES, exportToCSV, exportToJSON,
-         isStarred, toggleStar } from "./utils.js?v=10";
-import { LoadingSpinner, ErrorMessage, Badge, StatusDot } from "./components.js?v=10";
+         isStarred, toggleStar } from "./utils.js?v=11";
+import { LoadingSpinner, ErrorMessage, Badge, StatusDot } from "./components.js?v=11";
 
 const html = htm.bind(createElement);
 
@@ -791,7 +791,39 @@ export function CompanyPage({ siren, onNavigate, currentUser }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [starred, setStarred] = useState(() => isStarred(siren, username));
+  const [isFlagged, setIsFlagged] = useState(false);
+  const [flagLoading, setFlagLoading] = useState(false);
   const abortRef = useRef(null);
+
+  // Check if company is flagged (shared)
+  useEffect(() => {
+    getFlaggedCompanies()
+      .then(flagged => { setIsFlagged(!!flagged[siren]); })
+      .catch(() => {});
+  }, [siren]);
+
+  const handleToggleFlag = async () => {
+    if (flagLoading || !company) return;
+    setFlagLoading(true);
+    try {
+      if (isFlagged) {
+        await unflagCompany(siren);
+        setIsFlagged(false);
+      } else {
+        await flagCompany(siren, {
+          company_name: company.nom_complet || "",
+          categorie_entreprise: company.categorie_entreprise || "",
+          siege_commune: company.siege ? (company.siege.libelle_commune || "") : "",
+          siege_code_postal: company.siege ? (company.siege.code_postal || "") : "",
+        });
+        setIsFlagged(true);
+      }
+    } catch (err) {
+      console.error("Flag toggle failed:", err);
+    } finally {
+      setFlagLoading(false);
+    }
+  };
 
   const handleToggleStar = () => {
     const wasStarred = isStarred(siren, username);
@@ -848,6 +880,17 @@ export function CompanyPage({ siren, onNavigate, currentUser }) {
               title=${starred ? "Remove star" : "Mark as contacted"}
             >
               ${starred ? "\u2605 Contacted" : "\u2606 Mark contacted"}
+            </button>
+            <button
+              onClick=${handleToggleFlag}
+              disabled=${flagLoading}
+              className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border rounded-md transition-colors " +
+                (isFlagged
+                  ? "bg-red-50 border-red-300 text-red-700 hover:bg-red-100"
+                  : "border-gray-300 bg-white hover:bg-gray-50 text-gray-700")}
+              title=${isFlagged ? "Remove flag" : "Flag this company"}
+            >
+              ${isFlagged ? "\u2691 Flagged" : "\u2690 Flag"}
             </button>
             <button
               onClick=${() => { exportToCSV(company); logActivity("export", company.siren + " CSV"); }}

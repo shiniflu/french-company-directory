@@ -20,6 +20,13 @@ export function Header({ currentUser, onLogout, onNavigate }) {
         <!-- Right: User info + actions -->
         ${currentUser && html`
           <div className="flex items-center gap-3">
+            <!-- Flagged link (all users) -->
+            <a href="#/flagged"
+               className="text-sm text-blue-200 hover:text-white transition-colors flex items-center gap-1"
+               style=${{ textDecoration: "none" }}>
+              <span className="text-xs">${"\u2691"}</span> Flagged
+            </a>
+
             <!-- Admin link (admin only) -->
             ${currentUser.role === "admin" && html`
               <a href="#/admin"

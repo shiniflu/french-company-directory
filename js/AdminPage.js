@@ -1,6 +1,6 @@
 import { createElement, useState, useEffect, useCallback } from "react";
 import htm from "htm";
-import { authFetch } from "./auth.js?v=9";
+import { authFetch } from "./auth.js?v=10";
 
 const html = htm.bind(createElement);
 

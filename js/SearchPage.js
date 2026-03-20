@@ -1,11 +1,11 @@
 import { createElement, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import htm from "htm";
-import { searchCompanies, logActivity } from "./api.js?v=9";
+import { searchCompanies, logActivity } from "./api.js?v=10";
 import { formatSiren, formatCurrency, getEmployeeLabel, getLatestFinance,
          CATEGORY_STYLES, EMPLOYEE_FILTER_OPTIONS,
          INDUSTRY_FILTER_OPTIONS, TURNOVER_FILTER_OPTIONS,
-         isStarred, toggleStar, starMultiple, bulkExportToCSV } from "./utils.js?v=9";
-import { LoadingSpinner, ErrorMessage, Badge, StatusDot, EmptyState } from "./components.js?v=9";
+         isStarred, toggleStar, starMultiple, bulkExportToCSV } from "./utils.js?v=10";
+import { LoadingSpinner, ErrorMessage, Badge, StatusDot, EmptyState } from "./components.js?v=10";
 
 const html = htm.bind(createElement);
 
@@ -207,7 +207,15 @@ function ResultsTable({ results, onCompanyClick, starVersion, onToggleStar, user
                   >${starred ? "\u2605" : "\u2606"}</button>
                 </td>
                 <td className="py-3 px-3">
-                  <span className="font-medium text-gray-900">${company.nom_complet}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-gray-900">${company.nom_complet}</span>
+                    ${company.complements && company.complements.est_importateur && html`
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-amber-100 text-amber-800 border border-amber-300">⬇ Importer</span>
+                    `}
+                    ${company.complements && company.complements.est_exportateur && html`
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-amber-100 text-amber-800 border border-amber-300">⬆ Exporter</span>
+                    `}
+                  </div>
                   ${company.siege && html`
                     <span className="block text-xs text-gray-400 mt-0.5">
                       ${company.siege.libelle_commune || ""}${company.siege.code_postal ? " (" + company.siege.code_postal + ")" : ""}

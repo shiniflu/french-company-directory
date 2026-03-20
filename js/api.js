@@ -1,4 +1,4 @@
-import { getToken } from "./auth.js?v=9";
+import { getToken } from "./auth.js?v=10";
 
 const BASE_URL = "https://recherche-entreprises.api.gouv.fr";
 

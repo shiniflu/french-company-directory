@@ -1,11 +1,11 @@
 import { createElement, useState, useEffect, useRef } from "react";
 import htm from "htm";
-import { getCompanyBySiren, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact } from "./api.js?v=9";
+import { getCompanyBySiren, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact } from "./api.js?v=10";
 import { formatSiren, formatSiret, formatCurrency, formatDate, getEmployeeLabel,
          getLegalFormLabel, getNafSectionLabel, getLatestFinance,
          CATEGORY_STYLES, exportToCSV, exportToJSON,
-         isStarred, toggleStar } from "./utils.js?v=9";
-import { LoadingSpinner, ErrorMessage, Badge, StatusDot } from "./components.js?v=9";
+         isStarred, toggleStar } from "./utils.js?v=10";
+import { LoadingSpinner, ErrorMessage, Badge, StatusDot } from "./components.js?v=10";
 
 const html = htm.bind(createElement);
 
@@ -36,6 +36,12 @@ function CompanyHeader({ company }) {
         <div className="flex flex-wrap items-center gap-2">
           <${StatusDot} active=${company.etat_administratif === "A"} />
           ${catStyle && html`<${Badge} label=${catStyle.label} bg=${catStyle.bg} text=${catStyle.text} />`}
+          ${company.complements && company.complements.est_importateur && html`
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold uppercase tracking-wide rounded-full bg-amber-100 text-amber-800 border border-amber-300">⬇ Importer</span>
+          `}
+          ${company.complements && company.complements.est_exportateur && html`
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold uppercase tracking-wide rounded-full bg-amber-100 text-amber-800 border border-amber-300">⬆ Exporter</span>
+          `}
         </div>
       </div>
 

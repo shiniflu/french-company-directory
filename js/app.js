@@ -1,12 +1,12 @@
 import { createElement, useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import htm from "htm";
-import { Header, Footer } from "./components.js?v=11";
-import { SearchPage } from "./SearchPage.js?v=11";
-import { CompanyPage } from "./CompanyPage.js?v=12";
+import { Header, Footer } from "./components.js?v=12";
+import { SearchPage } from "./SearchPage.js?v=12";
+import { CompanyPage } from "./CompanyPage.js?v=13";
 import { LoginPage } from "./LoginPage.js?v=11";
 import { AdminPage } from "./AdminPage.js?v=11";
-import { FlaggedPage } from "./FlaggedPage.js?v=11";
+import { FlaggedPage } from "./FlaggedPage.js?v=12";
 import { getUser, logout, validateSession } from "./auth.js?v=11";
 
 const html = htm.bind(createElement);

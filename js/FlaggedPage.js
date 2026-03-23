@@ -20,7 +20,7 @@ export function FlaggedPage({ onNavigate, currentUser }) {
     return () => { cancelled = true; };
   }, []);
 
-  const handleUnflag = async (siren) => {
+  const handleRemove = async (siren) => {
     try {
       await unflagCompany(siren);
       setFlagged(prev => {
@@ -29,7 +29,7 @@ export function FlaggedPage({ onNavigate, currentUser }) {
         return next;
       });
     } catch (err) {
-      alert("Failed to unflag: " + err.message);
+      alert("Failed to remove: " + err.message);
     }
   };
 
@@ -37,7 +37,7 @@ export function FlaggedPage({ onNavigate, currentUser }) {
     (b.flagged_at || "").localeCompare(a.flagged_at || "")
   );
 
-  if (loading) return html`<${LoadingSpinner} message="Loading flagged companies..." />`;
+  if (loading) return html`<${LoadingSpinner} message="Loading starred companies..." />`;
   if (error) return html`<${ErrorMessage} message=${error} />`;
 
   return html`
@@ -45,18 +45,18 @@ export function FlaggedPage({ onNavigate, currentUser }) {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <span className="text-red-500">${"\u2691"}</span> Flagged Companies
+            <span className="text-yellow-500">${"\u2605"}</span> Starred Companies
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            ${entries.length} compan${entries.length === 1 ? "y" : "ies"} flagged by the team
+            ${entries.length} compan${entries.length === 1 ? "y" : "ies"} starred by the team
           </p>
         </div>
       </div>
 
       ${entries.length === 0
         ? html`<${EmptyState}
-            title="No flagged companies"
-            message="Flag companies from the search results or company detail page"
+            title="No starred companies"
+            message="Star companies from the search results or company detail page"
           />`
         : html`
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
@@ -67,8 +67,8 @@ export function FlaggedPage({ onNavigate, currentUser }) {
                   <th className="py-3 px-3">SIREN</th>
                   <th className="py-3 px-3 hidden sm:table-cell">Location</th>
                   <th className="py-3 px-3 hidden md:table-cell">Category</th>
-                  <th className="py-3 px-3">Flagged By</th>
-                  <th className="py-3 px-3 hidden lg:table-cell">Flagged At</th>
+                  <th className="py-3 px-3">Starred By</th>
+                  <th className="py-3 px-3 hidden lg:table-cell">Starred At</th>
                   <th className="py-3 px-3 text-right">Action</th>
                 </tr>
               </thead>
@@ -77,7 +77,7 @@ export function FlaggedPage({ onNavigate, currentUser }) {
                   const catStyle = CATEGORY_STYLES[item.categorie_entreprise];
                   return html`
                     <tr key=${item.siren}
-                        className=${"border-b border-gray-100 hover:bg-red-50 transition-colors " + (i % 2 === 0 ? "bg-white" : "bg-gray-50")}>
+                        className=${"border-b border-gray-100 hover:bg-yellow-50 transition-colors " + (i % 2 === 0 ? "bg-white" : "bg-gray-50")}>
                       <td className="py-3 px-3">
                         <a href=${"#/company/" + item.siren}
                            className="font-medium text-blue-700 hover:text-blue-900 hover:underline cursor-pointer">
@@ -100,11 +100,11 @@ export function FlaggedPage({ onNavigate, currentUser }) {
                       </td>
                       <td className="py-3 px-3 text-right">
                         <button
-                          onClick=${() => handleUnflag(item.siren)}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded hover:bg-red-100 transition-colors"
-                          title="Remove flag"
+                          onClick=${() => handleRemove(item.siren)}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-yellow-700 bg-yellow-50 rounded hover:bg-yellow-100 transition-colors"
+                          title="Remove star"
                         >
-                          ${"\u2691"} Unflag
+                          ${"\u2606"} Unstar
                         </button>
                       </td>
                     </tr>

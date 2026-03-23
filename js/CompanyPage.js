@@ -525,7 +525,7 @@ function DirectorsList({ dirigeants, companyName, username }) {
 }
 
 // ── CFO Section (server-cached) ─────────────────────
-function CfoSection({ siren, companyName, companyWebsite, dirigeants, username }) {
+function CfoSection({ siren, companyName, dirigeants, username }) {
   const [cfoData, setCfoData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -536,8 +536,6 @@ function CfoSection({ siren, companyName, companyWebsite, dirigeants, username }
   const [manualLast, setManualLast] = useState("");
   const [scraping, setScraping] = useState(false);
   const [scrapeResults, setScrapeResults] = useState(null);
-  const [showWebsiteInput, setShowWebsiteInput] = useState(false);
-  const [websiteUrl, setWebsiteUrl] = useState(companyWebsite || "");
 
   // On mount: check server cache
   useEffect(() => {
@@ -629,23 +627,19 @@ function CfoSection({ siren, companyName, companyWebsite, dirigeants, username }
     enrichAndSave(manualFirst.trim(), manualLast.trim(), "CFO");
   };
 
-  // Website scraping for CFO
-  const handleScrapeWebsite = async (url) => {
-    const targetUrl = url || websiteUrl;
-    if (!targetUrl.trim()) {
-      setShowWebsiteInput(true);
-      return;
-    }
+  // Website scraping for CFO — server auto-guesses URL from company name
+  const handleScrapeWebsite = async () => {
     setScraping(true);
     setError(null);
     setScrapeResults(null);
     try {
-      const result = await scrapeWebsiteForCfo(targetUrl.trim(), companyName || "");
+      // Send company name to server — it will guess domains automatically
+      const result = await scrapeWebsiteForCfo("", companyName || "");
       if (result.contacts && result.contacts.length > 0) {
         setScrapeResults(result.contacts);
       } else {
         setScrapeResults([]);
-        setError("No CFO/finance contacts found on website. Try entering the name manually.");
+        setError("No CFO/finance contacts found on website. Try LinkedIn search or enter the name manually.");
       }
     } catch (e) {
       setError("Website scan failed: " + e.message);
@@ -771,26 +765,6 @@ function CfoSection({ siren, companyName, companyWebsite, dirigeants, username }
               ✏️ Enter name manually
             </button>
           </div>
-
-          ${showWebsiteInput && html`
-            <div className="bg-amber-50 rounded-md p-4 border border-amber-200 mt-2">
-              <p className="text-xs text-amber-700 mb-2">
-                Enter the company website URL to scan for CFO/finance director names:
-              </p>
-              <div className="flex gap-3 items-end">
-                <div className="flex-1">
-                  <input type="text" value=${websiteUrl} onInput=${(e) => setWebsiteUrl(e.target.value)}
-                    className="w-full px-3 py-2 border border-amber-300 rounded-md text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                    placeholder="https://www.company.com" />
-                </div>
-                <button onClick=${() => handleScrapeWebsite()}
-                  disabled=${!websiteUrl.trim()}
-                  className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 transition-colors disabled:opacity-50">
-                  Scan
-                </button>
-              </div>
-            </div>
-          `}
 
           ${scrapeResults && scrapeResults.length > 0 && html`
             <div className="bg-amber-50 rounded-md p-4 border border-amber-200 mt-2">
@@ -1089,7 +1063,7 @@ export function CompanyPage({ siren, onNavigate, currentUser }) {
           </div>
 
           <div className="mt-6">
-            <${CfoSection} siren=${company.siren} companyName=${company.nom_complet} companyWebsite="" dirigeants=${company.dirigeants} username=${username} />
+            <${CfoSection} siren=${company.siren} companyName=${company.nom_complet} dirigeants=${company.dirigeants} username=${username} />
           </div>
 
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">

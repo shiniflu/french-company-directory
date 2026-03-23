@@ -714,8 +714,23 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             website = (body.get("website") or "").strip()
             company_name = (body.get("company_name") or "").strip()
 
+            # Auto-guess domain from company name if no URL provided
+            if not website and company_name:
+                # Clean company name for domain guessing
+                clean = company_name.lower().strip()
+                # Remove common French legal suffixes
+                for suffix in [" sa", " sas", " sarl", " eurl", " sasu", " sci",
+                               " se", " snc", " scop", " sca", " gmbh", " ltd",
+                               " inc", " corp", " group", " groupe", " france"]:
+                    if clean.endswith(suffix):
+                        clean = clean[:-len(suffix)].strip()
+                # Remove special chars, keep only alphanumeric
+                clean = re.sub(r'[^a-z0-9]', '', clean)
+                if clean:
+                    website = f"https://www.{clean}.fr"
+
             if not website:
-                self.send_json(400, {"error": "website URL is required"})
+                self.send_json(400, {"error": "Could not determine website URL. Please provide one."})
                 return
 
             # Normalize URL
@@ -746,18 +761,25 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             found_contacts = []
             pages_to_try = []
 
-            # Build list of URLs to scan
-            base = website.rstrip("/")
-            pages_to_try.append(base)
+            # Build base URLs — try .fr and .com variants
+            bases = [website.rstrip("/")]
+            # If auto-guessed, also try .com variant
+            if website.endswith(".fr"):
+                bases.append(website[:-3].rstrip("/") + ".com")
+            elif website.endswith(".com"):
+                bases.append(website[:-4].rstrip("/") + ".fr")
+
             # Common pages where executives are listed
-            for suffix in [
-                "/about", "/about-us", "/a-propos", "/qui-sommes-nous",
+            suffixes = [
+                "", "/about", "/about-us", "/a-propos", "/qui-sommes-nous",
                 "/team", "/equipe", "/notre-equipe", "/our-team",
                 "/management", "/direction", "/governance", "/gouvernance",
                 "/leadership", "/mentions-legales", "/legal",
                 "/contact", "/contacts", "/nous-contacter",
-            ]:
-                pages_to_try.append(base + suffix)
+            ]
+            for base in bases:
+                for suffix in suffixes:
+                    pages_to_try.append(base + suffix)
 
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",

@@ -669,7 +669,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
 
             url = "https://api.developers.kaspr.io/profile/linkedin"
             req = urllib.request.Request(url, data=body, method="POST")
-            req.add_header("Authorization", KASPR_API_KEY)
+            req.add_header("Authorization", f"Bearer {KASPR_API_KEY}")
             req.add_header("Content-Type", "application/json")
             req.add_header("Accept", "application/json")
             req.add_header("User-Agent", "CompanySearch/1.0")

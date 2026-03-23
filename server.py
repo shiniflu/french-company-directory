@@ -16,6 +16,8 @@ import hashlib
 import secrets
 import datetime
 import threading
+import re
+import html as html_module
 
 # ── API Keys ─────────────────────────────────────────
 LUSHA_API_KEY = "939a946a-f6d8-4617-b020-6b08535ea8f3"
@@ -221,6 +223,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_kaspr()
         elif self.path.startswith("/api/cfo/"):
             self.handle_cfo_save()
+        elif self.path == "/api/scrape-cfo":
+            self.handle_scrape_cfo()
         elif self.path.startswith("/api/flagged/"):
             self.handle_flagged_add()
         elif self.path == "/api/auth/login":
@@ -687,6 +691,159 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(e.code, {
                 "error": f"Kaspr API error ({e.code})",
                 "details": error_body
+            })
+
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
+
+
+    # ── Website CFO Scraper ─────────────────────────────
+
+    def handle_scrape_cfo(self):
+        """
+        POST /api/scrape-cfo  { "website": "https://example.com", "company_name": "Example" }
+        Scrapes a company website to find CFO / finance director names.
+        """
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+
+        try:
+            body = self.read_body()
+            website = (body.get("website") or "").strip()
+            company_name = (body.get("company_name") or "").strip()
+
+            if not website:
+                self.send_json(400, {"error": "website URL is required"})
+                return
+
+            # Normalize URL
+            if not website.startswith("http"):
+                website = "https://" + website
+
+            log_activity(auth_user["username"], "scrape_cfo", f"{company_name} ({website})")
+
+            # CFO-related keywords to search for (French + English)
+            CFO_KEYWORDS = [
+                "directeur financier", "directrice financière", "directrice financiere",
+                "chief financial officer", "cfo",
+                "responsable financier", "responsable financière",
+                "directeur administratif et financier", "daf",
+                "finance director", "head of finance",
+                "trésorier", "tresorier", "treasurer",
+                "directeur de la comptabilité", "directeur comptable",
+            ]
+
+            # French name pattern: capitalized words (handles accented chars)
+            # Matches patterns like "Jean Dupont", "Marie-Claire Lefèvre", "Jean-Pierre DE LA FONTAINE"
+            NAME_PATTERN = re.compile(
+                r'([A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ]+(?:-[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ]+)?'
+                r'(?:\s+(?:de|du|des|le|la|les|von|van|di|da|el|al)\s+)?'
+                r'\s+[A-ZÀ-ÖØ-Ý][A-ZÀ-Öa-zà-öø-ÿ\'-]+(?:\s+[A-ZÀ-ÖØ-Ý][A-ZÀ-Öa-zà-öø-ÿ\'-]+)?)'
+            )
+
+            found_contacts = []
+            pages_to_try = []
+
+            # Build list of URLs to scan
+            base = website.rstrip("/")
+            pages_to_try.append(base)
+            # Common pages where executives are listed
+            for suffix in [
+                "/about", "/about-us", "/a-propos", "/qui-sommes-nous",
+                "/team", "/equipe", "/notre-equipe", "/our-team",
+                "/management", "/direction", "/governance", "/gouvernance",
+                "/leadership", "/mentions-legales", "/legal",
+                "/contact", "/contacts", "/nous-contacter",
+            ]:
+                pages_to_try.append(base + suffix)
+
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+            }
+
+            seen_names = set()
+
+            for page_url in pages_to_try:
+                if len(found_contacts) >= 5:
+                    break
+                try:
+                    req = urllib.request.Request(page_url, headers=headers, method="GET")
+                    resp = urllib.request.urlopen(req, timeout=8, context=ssl_ctx)
+                    raw_html = resp.read().decode("utf-8", errors="replace")
+
+                    # Strip HTML tags but keep text structure
+                    text = re.sub(r'<script[^>]*>.*?</script>', ' ', raw_html, flags=re.DOTALL | re.IGNORECASE)
+                    text = re.sub(r'<style[^>]*>.*?</style>', ' ', text, flags=re.DOTALL | re.IGNORECASE)
+                    text = re.sub(r'<[^>]+>', ' ', text)
+                    text = html_module.unescape(text)
+                    text = re.sub(r'\s+', ' ', text)
+
+                    text_lower = text.lower()
+
+                    for kw in CFO_KEYWORDS:
+                        # Find all occurrences of this keyword
+                        start = 0
+                        while True:
+                            idx = text_lower.find(kw, start)
+                            if idx == -1:
+                                break
+                            start = idx + len(kw)
+
+                            # Extract a window of text around the keyword (200 chars before and after)
+                            window_start = max(0, idx - 200)
+                            window_end = min(len(text), idx + len(kw) + 200)
+                            window = text[window_start:window_end]
+
+                            # Look for names in this window
+                            names = NAME_PATTERN.findall(window)
+                            for name in names:
+                                name = name.strip()
+                                if len(name) < 4 or name.lower() in seen_names:
+                                    continue
+                                # Filter out common non-name words
+                                skip_words = {"the", "our", "les", "nos", "des", "par", "sur", "avec",
+                                              "pour", "dans", "qui", "est", "sont", "ont", "cette",
+                                              "son", "ses", "leur", "nous", "vous", "ils", "elle",
+                                              "depuis", "entre", "plus", "aussi", "ainsi", "comme"}
+                                parts = name.split()
+                                if any(p.lower() in skip_words for p in parts):
+                                    continue
+                                if len(parts) < 2:
+                                    continue
+
+                                seen_names.add(name.lower())
+                                first_name = parts[0]
+                                last_name = " ".join(parts[1:])
+
+                                found_contacts.append({
+                                    "first_name": first_name,
+                                    "last_name": last_name,
+                                    "full_name": name,
+                                    "title": kw.title(),
+                                    "source_url": page_url,
+                                    "keyword_matched": kw,
+                                })
+
+                                if len(found_contacts) >= 5:
+                                    break
+                            if len(found_contacts) >= 5:
+                                break
+                        if len(found_contacts) >= 5:
+                            break
+
+                except Exception:
+                    # Page doesn't exist or can't be fetched — skip
+                    continue
+
+            self.send_json(200, {
+                "contacts": found_contacts,
+                "pages_scanned": len(pages_to_try),
+                "company_name": company_name,
+                "website": website,
             })
 
         except Exception as e:

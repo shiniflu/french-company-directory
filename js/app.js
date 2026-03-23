@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import htm from "htm";
 import { Header, Footer } from "./components.js?v=12";
 import { SearchPage } from "./SearchPage.js?v=15";
-import { CompanyPage } from "./CompanyPage.js?v=14";
+import { CompanyPage } from "./CompanyPage.js?v=16";
 import { LoginPage } from "./LoginPage.js?v=11";
 import { AdminPage } from "./AdminPage.js?v=11";
 import { FlaggedPage } from "./FlaggedPage.js?v=12";

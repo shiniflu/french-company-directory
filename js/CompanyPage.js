@@ -1,6 +1,6 @@
 import { createElement, useState, useEffect, useRef } from "react";
 import htm from "htm";
-import { getCompanyBySiren, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany } from "./api.js?v=11";
+import { getCompanyBySiren, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany, scrapeWebsiteForCfo } from "./api.js?v=15";
 import { formatSiren, formatSiret, formatCurrency, formatDate, getEmployeeLabel,
          getLegalFormLabel, getNafSectionLabel, getLatestFinance,
          CATEGORY_STYLES, exportToCSV, exportToJSON, isInternationalTrade } from "./utils.js?v=12";
@@ -525,7 +525,7 @@ function DirectorsList({ dirigeants, companyName, username }) {
 }
 
 // ── CFO Section (server-cached) ─────────────────────
-function CfoSection({ siren, companyName, dirigeants, username }) {
+function CfoSection({ siren, companyName, companyWebsite, dirigeants, username }) {
   const [cfoData, setCfoData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -534,6 +534,10 @@ function CfoSection({ siren, companyName, dirigeants, username }) {
   const [showManual, setShowManual] = useState(false);
   const [manualFirst, setManualFirst] = useState("");
   const [manualLast, setManualLast] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [scrapeResults, setScrapeResults] = useState(null);
+  const [showWebsiteInput, setShowWebsiteInput] = useState(false);
+  const [websiteUrl, setWebsiteUrl] = useState(companyWebsite || "");
 
   // On mount: check server cache
   useEffect(() => {
@@ -623,6 +627,37 @@ function CfoSection({ siren, companyName, dirigeants, username }) {
   const handleManualSearch = () => {
     if (!manualFirst.trim() || !manualLast.trim()) return;
     enrichAndSave(manualFirst.trim(), manualLast.trim(), "CFO");
+  };
+
+  // Website scraping for CFO
+  const handleScrapeWebsite = async (url) => {
+    const targetUrl = url || websiteUrl;
+    if (!targetUrl.trim()) {
+      setShowWebsiteInput(true);
+      return;
+    }
+    setScraping(true);
+    setError(null);
+    setScrapeResults(null);
+    try {
+      const result = await scrapeWebsiteForCfo(targetUrl.trim(), companyName || "");
+      if (result.contacts && result.contacts.length > 0) {
+        setScrapeResults(result.contacts);
+      } else {
+        setScrapeResults([]);
+        setError("No CFO/finance contacts found on website. Try entering the name manually.");
+      }
+    } catch (e) {
+      setError("Website scan failed: " + e.message);
+    } finally {
+      setScraping(false);
+    }
+  };
+
+  // Use a scraped contact → enrich via Lusha/Kaspr
+  const handleUseScrapeResult = (contact) => {
+    setScrapeResults(null);
+    enrichAndSave(contact.first_name, contact.last_name, contact.title);
   };
 
   const linkedinSearchUrl = "https://www.linkedin.com/search/results/people/?keywords="
@@ -720,6 +755,12 @@ function CfoSection({ siren, companyName, dirigeants, username }) {
           `}
 
           <div className="flex flex-wrap items-center gap-3 ${cfoDirectors.length === 0 ? '' : 'pt-1'}">
+            <button onClick=${() => handleScrapeWebsite()}
+              disabled=${scraping}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-full hover:bg-amber-100 transition-colors border border-amber-200 disabled:opacity-50">
+              ${scraping ? html`<div className="spinner" style=${{ width: "0.7rem", height: "0.7rem", borderWidth: "2px" }}></div>` : "\uD83C\uDF10"}
+              ${scraping ? "Scanning website..." : "Scan Company Website"}
+            </button>
             <a href=${linkedinSearchUrl} target="_blank" rel="noopener noreferrer"
                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-sky-700 bg-sky-50 rounded-full hover:bg-sky-100 transition-colors">
               <${LinkedInIcon} className="h-3.5 w-3.5" />
@@ -730,6 +771,57 @@ function CfoSection({ siren, companyName, dirigeants, username }) {
               ✏️ Enter name manually
             </button>
           </div>
+
+          ${showWebsiteInput && html`
+            <div className="bg-amber-50 rounded-md p-4 border border-amber-200 mt-2">
+              <p className="text-xs text-amber-700 mb-2">
+                Enter the company website URL to scan for CFO/finance director names:
+              </p>
+              <div className="flex gap-3 items-end">
+                <div className="flex-1">
+                  <input type="text" value=${websiteUrl} onInput=${(e) => setWebsiteUrl(e.target.value)}
+                    className="w-full px-3 py-2 border border-amber-300 rounded-md text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+                    placeholder="https://www.company.com" />
+                </div>
+                <button onClick=${() => handleScrapeWebsite()}
+                  disabled=${!websiteUrl.trim()}
+                  className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 transition-colors disabled:opacity-50">
+                  Scan
+                </button>
+              </div>
+            </div>
+          `}
+
+          ${scrapeResults && scrapeResults.length > 0 && html`
+            <div className="bg-amber-50 rounded-md p-4 border border-amber-200 mt-2">
+              <p className="text-xs text-amber-700 mb-2 font-semibold">
+                ${"🌐"} Found ${scrapeResults.length} potential CFO contact(s) on website:
+              </p>
+              <ul className="space-y-2">
+                ${scrapeResults.map((c, i) => html`
+                  <li key=${i} className="flex items-center justify-between bg-white rounded-md p-2 border border-amber-100">
+                    <div>
+                      <span className="font-semibold text-sm text-gray-900">${c.full_name}</span>
+                      <span className="text-xs text-gray-500 ml-2">— ${c.title}</span>
+                      <span className="block text-[10px] text-gray-400 mt-0.5">Found near "${c.keyword_matched}" on ${c.source_url.replace(/https?:\/\//, "").split("/").slice(0, 2).join("/")}</span>
+                    </div>
+                    <button onClick=${() => handleUseScrapeResult(c)}
+                      className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-md hover:bg-emerald-700 transition-colors whitespace-nowrap">
+                      ${"📱"} Get Phone & Email
+                    </button>
+                  </li>
+                `)}
+              </ul>
+            </div>
+          `}
+
+          ${scrapeResults && scrapeResults.length === 0 && !error && html`
+            <div className="bg-gray-50 rounded-md p-3 border border-gray-200 mt-2">
+              <p className="text-xs text-gray-500">
+                No CFO contacts found on the website. Try LinkedIn search or enter the name manually.
+              </p>
+            </div>
+          `}
 
           ${showManual && html`
             <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
@@ -997,7 +1089,7 @@ export function CompanyPage({ siren, onNavigate, currentUser }) {
           </div>
 
           <div className="mt-6">
-            <${CfoSection} siren=${company.siren} companyName=${company.nom_complet} dirigeants=${company.dirigeants} username=${username} />
+            <${CfoSection} siren=${company.siren} companyName=${company.nom_complet} companyWebsite="" dirigeants=${company.dirigeants} username=${username} />
           </div>
 
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">

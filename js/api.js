@@ -257,6 +257,27 @@ export async function unflagCompany(siren, signal) {
   return data;
 }
 
+// ── Website CFO Scraper ─────────────────────────────
+
+/**
+ * Scrape a company website to find CFO / finance director names.
+ * @param {string} website - Company website URL
+ * @param {string} companyName - Company name
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<{contacts: Array, pages_scanned: number}>}
+ */
+export async function scrapeWebsiteForCfo(website, companyName, signal) {
+  const response = await fetch("/api/scrape-cfo", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ website, company_name: companyName }),
+    signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Scraping failed");
+  return data;
+}
+
 // ── Activity Logging ────────────────────────────────
 
 /**

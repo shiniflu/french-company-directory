@@ -4,7 +4,7 @@ import { searchCompanies, logActivity, getFlaggedCompanies, flagCompany, unflagC
 import { formatSiren, formatCurrency, getEmployeeLabel, getLatestFinance,
          CATEGORY_STYLES, EMPLOYEE_FILTER_OPTIONS,
          INDUSTRY_FILTER_OPTIONS, TURNOVER_FILTER_OPTIONS,
-         bulkExportToCSV } from "./utils.js?v=11";
+         bulkExportToCSV, isInternationalTrade } from "./utils.js?v=12";
 import { LoadingSpinner, ErrorMessage, Badge, StatusDot, EmptyState } from "./components.js?v=11";
 
 const html = htm.bind(createElement);
@@ -210,11 +210,8 @@ function ResultsTable({ results, onCompanyClick, onToggleStar, username, flagged
                 <td className="py-3 px-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-gray-900">${company.nom_complet}</span>
-                    ${company.complements && company.complements.est_importateur && html`
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-amber-100 text-amber-800 border border-amber-300">⬇ Importer</span>
-                    `}
-                    ${company.complements && company.complements.est_exportateur && html`
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-amber-100 text-amber-800 border border-amber-300">⬆ Exporter</span>
+                    ${isInternationalTrade(company) && html`
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-full bg-amber-100 text-amber-800 border border-amber-300">${"\uD83C\uDF10"} Int'l Trade</span>
                     `}
                   </div>
                   ${company.siege && html`

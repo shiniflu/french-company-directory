@@ -253,6 +253,31 @@ function downloadFile(content, filename, mimeType) {
   URL.revokeObjectURL(url);
 }
 
+// ── International Trade detection ────────────────────
+
+const TRADE_KEYWORDS = /\b(import|export|international\s+trade|logistics|wholesale|négoce|négoce international|commerce international)\b/i;
+
+export function isInternationalTrade(company) {
+  // 1. Check company name
+  const name = company.nom_complet || company.nom_raison_sociale || "";
+  if (TRADE_KEYWORDS.test(name)) return true;
+
+  // 2. Check NAF/APE code — codes starting with 46 = wholesale trade
+  const naf = (company.activite_principale || "").replace(/\./g, "");
+  if (naf.startsWith("46")) return true;
+
+  // Also check siege NAF if different
+  const siegeNaf = (company.siege && company.siege.activite_principale || "").replace(/\./g, "");
+  if (siegeNaf.startsWith("46")) return true;
+
+  // 3. Check complements flags (if API ever adds them)
+  if (company.complements) {
+    if (company.complements.est_importateur || company.complements.est_exportateur) return true;
+  }
+
+  return false;
+}
+
 // ── Star / Bookmark helpers (per-user) ──────────────
 
 function getStarredKey(username) {

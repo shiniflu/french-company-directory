@@ -700,7 +700,10 @@ if __name__ == "__main__":
     os.makedirs(DATA_DIR, exist_ok=True)
     init_default_admin()
 
-    server = http.server.HTTPServer(("0.0.0.0", PORT), AppHandler)
+    class ThreadingHTTPServer(http.server.ThreadingHTTPServer):
+        daemon_threads = True
+
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), AppHandler)
     print(f"=== Company Search Server ===")
     print(f"http://localhost:{PORT}")
     print(f"Lusha & Kaspr API proxy enabled")

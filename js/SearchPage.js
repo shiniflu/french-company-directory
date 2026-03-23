@@ -5,7 +5,7 @@ import { formatSiren, formatCurrency, getEmployeeLabel, getLatestFinance,
          CATEGORY_STYLES, EMPLOYEE_FILTER_OPTIONS,
          INDUSTRY_FILTER_OPTIONS, TURNOVER_FILTER_OPTIONS,
          bulkExportToCSV, isInternationalTrade } from "./utils.js?v=12";
-import { LoadingSpinner, ErrorMessage, Badge, StatusDot, EmptyState } from "./components.js?v=11";
+import { LoadingSpinner, ErrorMessage, Badge, EmptyState } from "./components.js?v=11";
 
 const html = htm.bind(createElement);
 
@@ -182,13 +182,11 @@ function ResultsTable({ results, onCompanyClick, onToggleStar, username, flagged
         <thead>
           <tr className="border-b-2 border-gray-200 text-left text-gray-500 text-xs uppercase tracking-wider">
             <th className="py-3 px-2 w-10"></th>
-            <th className="py-3 px-2 w-10"></th>
             <th className="py-3 px-3">Company</th>
             <th className="py-3 px-3">SIREN</th>
             <th className="py-3 px-3 hidden sm:table-cell">Category</th>
             <th className="py-3 px-3 hidden md:table-cell">Employees</th>
             <th className="py-3 px-3 hidden lg:table-cell">Revenue</th>
-            <th className="py-3 px-3">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -230,9 +228,6 @@ function ResultsTable({ results, onCompanyClick, onToggleStar, username, flagged
                 <td className="py-3 px-3 hidden md:table-cell text-gray-600">${getEmployeeLabel(company.tranche_effectif_salarie)}</td>
                 <td className="py-3 px-3 hidden lg:table-cell text-gray-600">
                   ${finance && finance.ca != null ? formatCurrency(finance.ca) : html`<span className="text-gray-400">${"\u2014"}</span>`}
-                </td>
-                <td className="py-3 px-3">
-                  <${StatusDot} active=${company.etat_administratif === "A"} />
                 </td>
               </tr>
             `;

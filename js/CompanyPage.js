@@ -339,6 +339,59 @@ function DirectorsList({ dirigeants, companyName, username }) {
       });
   };
 
+  const handleKasprEnrich = async (index, director) => {
+    const firstName = (director.prenoms || "").split(" ")[0];
+    const lastName = (director.nom || "").replace(/\s*\(.*?\)\s*/g, "").trim();
+    if (!firstName || !lastName) return;
+    const fullName = firstName + " " + lastName;
+
+    setEnrichment(prev => ({ ...prev, [index]: { ...prev[index], kasprLoading: true, kasprError: null } }));
+
+    try {
+      // If Lusha already found a LinkedIn URL, use it; otherwise construct a search-based one
+      const existing = enrichment[index];
+      let linkedin = "";
+      if (existing && existing.data) {
+        const sn = existing.data.socialNetworks || existing.data.social || [];
+        linkedin = existing.data.linkedinUrl || existing.data.linkedin_url
+          || (Array.isArray(sn) ? ((sn.find(s => s.type === "linkedin" || s.label === "linkedin")) || {}).url : null)
+          || (typeof sn === "object" && !Array.isArray(sn) ? sn.linkedin : null)
+          || "";
+      }
+      if (!linkedin) {
+        // Use a LinkedIn search URL as fallback
+        linkedin = "https://www.linkedin.com/search/results/people/?keywords=" + encodeURIComponent(fullName + " " + (companyName || ""));
+      }
+
+      const kasprData = await enrichWithKaspr(fullName, linkedin);
+
+      // Merge Kaspr data with existing data
+      const prevData = (existing && existing.data) || {};
+      const prevEmails = prevData.emails || prevData.emailAddresses || [];
+      const prevPhones = prevData.phoneNumbers || prevData.phones || [];
+
+      const kasprEmails = kasprData.emails || kasprData.emailAddresses || [];
+      const kasprPhones = kasprData.phoneNumbers || kasprData.phones || [];
+
+      const merged = {
+        ...prevData,
+        emails: prevEmails.length > 0 ? prevEmails : kasprEmails,
+        phoneNumbers: [...prevPhones, ...kasprPhones],
+        source: prevData.source ? prevData.source + "+kaspr" : "kaspr",
+      };
+
+      // If Kaspr returned a LinkedIn URL and we didn't have one
+      if (!merged.linkedinUrl && kasprData.linkedinUrl) {
+        merged.linkedinUrl = kasprData.linkedinUrl;
+      }
+
+      saveCachedContact(firstName, lastName, companyName || "", merged, username);
+      setEnrichment(prev => ({ ...prev, [index]: { loading: false, kasprLoading: false, data: merged, error: null } }));
+    } catch (err) {
+      setEnrichment(prev => ({ ...prev, [index]: { ...prev[index], kasprLoading: false, kasprError: err.message } }));
+    }
+  };
+
   const displayed = showAll ? dirigeants : dirigeants.slice(0, 8);
 
   return html`
@@ -415,24 +468,48 @@ function DirectorsList({ dirigeants, companyName, username }) {
                   </td>
                   <td className="py-2 pr-3">
                     ${isPerson && !hasResult && html`
-                      <button
-                        onClick=${() => handleEnrich(i, d, false)}
-                        disabled=${enrichState && enrichState.loading}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors disabled:opacity-50"
-                        title="Find email & phone via Lusha"
-                      >
-                        <span>@</span> Find Contact
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick=${() => handleEnrich(i, d, false)}
+                          disabled=${enrichState && enrichState.loading}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors disabled:opacity-50"
+                          title="Find email & phone via Lusha"
+                        >
+                          <span>@</span> Lusha
+                        </button>
+                        <button
+                          onClick=${() => handleKasprEnrich(i, d)}
+                          disabled=${enrichState && (enrichState.loading || enrichState.kasprLoading)}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-purple-600 bg-purple-50 rounded hover:bg-purple-100 transition-colors disabled:opacity-50"
+                          title="Find email & phone via Kaspr"
+                        >
+                          <span>K</span> Kaspr
+                        </button>
+                      </div>
                     `}
                     ${isPerson && hasResult && !enrichState.loading && html`
-                      <span className="inline-flex items-center gap-2">
+                      <div className="flex items-center gap-2">
                         ${enrichState.fromCache && html`<span className="text-xs text-gray-300" title="Loaded from cache — no credit spent">cached</span>`}
                         <button
                           onClick=${() => handleEnrich(i, d, true)}
                           className="text-xs text-gray-400 hover:text-blue-500"
                           title="Refresh from Lusha (will spend a credit)"
                         >Refresh</button>
-                      </span>
+                        ${!(enrichState.kasprLoading) && html`
+                          <button
+                            onClick=${() => handleKasprEnrich(i, d)}
+                            disabled=${enrichState.kasprLoading}
+                            className="text-xs text-purple-400 hover:text-purple-600"
+                            title="Search via Kaspr (will spend a credit)"
+                          >Kaspr</button>
+                        `}
+                        ${enrichState.kasprLoading && html`
+                          <span className="text-xs text-purple-400">Kaspr...</span>
+                        `}
+                      </div>
+                      ${enrichState.kasprError && html`
+                        <div className="text-xs text-red-400 mt-0.5">${enrichState.kasprError}</div>
+                      `}
                     `}
                   </td>
                 </tr>

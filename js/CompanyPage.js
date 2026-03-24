@@ -1,6 +1,6 @@
 import { createElement, useState, useEffect, useRef } from "react";
 import htm from "htm";
-import { getCompanyBySiren, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany, scrapeWebsiteForCfo } from "./api.js?v=15";
+import { getCompanyBySiren, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany, scrapeWebsiteForCfo, getCells, createCell, addCompaniesToCell } from "./api.js?v=16";
 import { formatSiren, formatSiret, formatCurrency, formatDate, getEmployeeLabel,
          getLegalFormLabel, getNafSectionLabel, getLatestFinance,
          CATEGORY_STYLES, exportToCSV, exportToJSON, isInternationalTrade } from "./utils.js?v=12";
@@ -931,12 +931,24 @@ export function CompanyPage({ siren, onNavigate, currentUser }) {
   const [error, setError] = useState(null);
   const [starred, setStarred] = useState(false);
   const [starLoading, setStarLoading] = useState(false);
+  const [showCellMenu, setShowCellMenu] = useState(false);
+  const [cellsList, setCellsList] = useState({});
+  const [companyCellNames, setCompanyCellNames] = useState([]);
+  const [cellMenuMode, setCellMenuMode] = useState("choose");
+  const [newCellName, setNewCellName] = useState("");
   const abortRef = useRef(null);
 
-  // Check if company is starred (shared, server-side)
+  // Check if company is starred + load cells
   useEffect(() => {
     getFlaggedCompanies()
       .then(flagged => { setStarred(!!flagged[siren]); })
+      .catch(() => {});
+    getCells()
+      .then(data => {
+        setCellsList(data.cells || {});
+        const cc = (data.company_cells || {})[siren] || [];
+        setCompanyCellNames(cc.map(c => c.cell_name));
+      })
       .catch(() => {});
   }, [siren]);
 
@@ -963,6 +975,35 @@ export function CompanyPage({ siren, onNavigate, currentUser }) {
     } finally {
       setStarLoading(false);
     }
+  };
+
+  const handleAddToCell = async (cellId) => {
+    if (!company) return;
+    const comp = [{
+      siren: company.siren,
+      company_name: company.nom_complet || "",
+      categorie_entreprise: company.categorie_entreprise || "",
+      commune: company.siege ? (company.siege.libelle_commune || "") : "",
+      code_postal: company.siege ? (company.siege.code_postal || "") : "",
+    }];
+    try {
+      await addCompaniesToCell(cellId, comp);
+      const data = await getCells();
+      setCellsList(data.cells || {});
+      const cc = (data.company_cells || {})[siren] || [];
+      setCompanyCellNames(cc.map(c => c.cell_name));
+      setShowCellMenu(false);
+    } catch (err) { console.error("Add to cell failed:", err); }
+  };
+
+  const handleCreateCellAndAdd = async () => {
+    if (!newCellName.trim() || !company) return;
+    try {
+      const result = await createCell(newCellName.trim());
+      setNewCellName("");
+      setCellMenuMode("choose");
+      await handleAddToCell(result.cell_id);
+    } catch (err) { console.error("Create cell failed:", err); }
   };
 
   const fetchCompany = () => {
@@ -1015,6 +1056,65 @@ export function CompanyPage({ siren, onNavigate, currentUser }) {
             >
               ${starred ? "\u2605 Contacted" : "\u2606 Mark contacted"}
             </button>
+            <div className="relative">
+              <button
+                onClick=${() => { setShowCellMenu(!showCellMenu); setCellMenuMode("choose"); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-purple-300 rounded-md bg-purple-50 hover:bg-purple-100 text-purple-700 transition-colors"
+              >
+                ${"📁"} Add to Cell
+              </button>
+              ${showCellMenu && html`
+                <div className="absolute top-full right-0 mt-1 w-64 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden"
+                     onClick=${(e) => e.stopPropagation()}>
+                  <div className="p-2 border-b border-gray-100 flex gap-2">
+                    <button onClick=${() => setCellMenuMode("choose")}
+                      className=${"flex-1 px-2 py-1 text-xs font-medium rounded " + (cellMenuMode === "choose" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                      Existing
+                    </button>
+                    <button onClick=${() => setCellMenuMode("create")}
+                      className=${"flex-1 px-2 py-1 text-xs font-medium rounded " + (cellMenuMode === "create" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                      + New
+                    </button>
+                  </div>
+                  ${cellMenuMode === "choose" && html`
+                    <div className="max-h-40 overflow-y-auto">
+                      ${Object.keys(cellsList).length === 0 && html`
+                        <p className="text-xs text-gray-400 p-3 text-center">No cells yet.</p>
+                      `}
+                      ${Object.entries(cellsList).map(([id, cell]) => html`
+                        <button key=${id} onClick=${() => handleAddToCell(id)}
+                          className="w-full text-left px-3 py-2 hover:bg-purple-50 border-b border-gray-50 text-sm">
+                          ${"📁"} ${cell.name}
+                        </button>
+                      `)}
+                    </div>
+                  `}
+                  ${cellMenuMode === "create" && html`
+                    <div className="p-3">
+                      <input type="text" value=${newCellName}
+                        onInput=${(e) => setNewCellName(e.target.value)}
+                        onKeyDown=${(e) => { if (e.key === "Enter") handleCreateCellAndAdd(); }}
+                        placeholder="Cell name"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500 outline-none mb-2" />
+                      <button onClick=${handleCreateCellAndAdd}
+                        disabled=${!newCellName.trim()}
+                        className="w-full px-2 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:opacity-50">
+                        Create & Add
+                      </button>
+                    </div>
+                  `}
+                </div>
+              `}
+            </div>
+            ${companyCellNames.length > 0 && html`
+              <div className="flex flex-wrap gap-1">
+                ${companyCellNames.map(name => html`
+                  <span key=${name} className="inline-flex items-center gap-0.5 px-2 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700 border border-purple-200">
+                    ${"📁"} ${name}
+                  </span>
+                `)}
+              </div>
+            `}
             <button
               onClick=${() => { exportToCSV(company); logActivity("export", company.siren + " CSV"); }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-md bg-white hover:bg-gray-50 text-gray-700 transition-colors"

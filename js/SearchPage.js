@@ -149,16 +149,14 @@ function SearchFilters({ filters, onChange, onReset }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-            <select
-              value=${filters.etat_administratif || ""}
-              onChange=${(e) => update("etat_administratif", e.target.value)}
+            <label className="block text-xs font-medium text-gray-600 mb-1">NAF Code</label>
+            <input
+              type="text"
+              value=${filters.activite_principale || ""}
+              onInput=${(e) => update("activite_principale", e.target.value)}
+              placeholder="e.g. 46.90Z, 62.01"
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">All</option>
-              <option value="A">Active</option>
-              <option value="C">Closed</option>
-            </select>
+            />
           </div>
 
           <div className="sm:col-span-2 lg:col-span-3 flex justify-end">
@@ -399,6 +397,8 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
         if (!k.startsWith("_") && v) cleanFilters[k] = v;
       });
       const params = { ...cleanFilters, per_page: API_PER_PAGE };
+      // Always default to active companies
+      if (!params.etat_administratif) params.etat_administratif = "A";
       if (query.trim()) {
         params.q = query.trim();
       }

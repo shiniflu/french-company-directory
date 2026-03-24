@@ -34,9 +34,9 @@ function CellListView({ cells, onSelectCell, onDeleteCell }) {
               </div>
               <button
                 onClick=${(e) => { e.stopPropagation(); onDeleteCell(id, cell.name); }}
-                className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                className="px-3 py-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 hover:text-red-700 transition-colors"
                 title="Delete cell">
-                ${"🗑️"}
+                Delete
               </button>
             </div>
             <div className="mt-3 text-xs text-gray-400">

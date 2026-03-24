@@ -29,6 +29,7 @@ USERS_FILE = os.path.join(DATA_DIR, "users.json")
 ACTIVITY_LOG = os.path.join(DATA_DIR, "activity_log.jsonl")
 CFO_CONTACTS_FILE = os.path.join(DATA_DIR, "cfo_contacts.json")
 FLAGGED_COMPANIES_FILE = os.path.join(DATA_DIR, "flagged_companies.json")
+CELLS_FILE = os.path.join(DATA_DIR, "cells.json")
 
 # Allow unverified SSL for proxied requests (some corporate networks)
 ssl_ctx = ssl.create_default_context()
@@ -80,6 +81,19 @@ def save_flagged_companies(flagged):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(FLAGGED_COMPANIES_FILE, "w", encoding="utf-8") as f:
         json.dump(flagged, f, indent=2, ensure_ascii=False)
+
+def load_cells():
+    """Load cells from JSON file. Structure: { "cell_id": { "name": "...", "created_by": "...", "created_at": "...", "companies": { "siren": { metadata } } } }"""
+    if not os.path.exists(CELLS_FILE):
+        return {}
+    with open(CELLS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_cells(cells):
+    """Save cells to JSON file."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(CELLS_FILE, "w", encoding="utf-8") as f:
+        json.dump(cells, f, indent=2, ensure_ascii=False)
 
 def hash_password(password, salt=None):
     """Hash password with SHA-256 + salt. Returns (hash, salt)."""
@@ -209,6 +223,10 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_cfo_get()
         elif self.path == "/api/flagged":
             self.handle_flagged_list()
+        elif self.path == "/api/cells":
+            self.handle_cells_list()
+        elif self.path.startswith("/api/cells/"):
+            self.handle_cell_detail()
         elif self.path == "/api/auth/me":
             self.handle_auth_me()
         elif self.path == "/api/admin/users":
@@ -227,6 +245,10 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_scrape_cfo()
         elif self.path.startswith("/api/flagged/"):
             self.handle_flagged_add()
+        elif self.path == "/api/cells":
+            self.handle_cell_create()
+        elif self.path.startswith("/api/cells/") and self.path.endswith("/companies"):
+            self.handle_cell_add_companies()
         elif self.path == "/api/auth/login":
             self.handle_auth_login()
         elif self.path == "/api/auth/logout":
@@ -245,6 +267,10 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_cfo_delete()
         elif self.path.startswith("/api/flagged/"):
             self.handle_flagged_remove()
+        elif self.path.startswith("/api/cells/") and "/companies/" in self.path:
+            self.handle_cell_remove_company()
+        elif self.path.startswith("/api/cells/"):
+            self.handle_cell_delete()
         else:
             self.send_error(404)
 
@@ -580,6 +606,141 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
         log_activity(auth_user["username"], "unflag_company",
                      f"{company_name} ({siren})")
         self.send_json(200, {"ok": True})
+
+    # ── Cells endpoints ──────────────────────────────
+
+    def handle_cells_list(self):
+        """GET /api/cells -> list all cells with company counts"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        cells = load_cells()
+        # Build a reverse map: siren -> [cell_id, cell_name]
+        company_cells = {}
+        for cell_id, cell in cells.items():
+            for siren in (cell.get("companies") or {}):
+                if siren not in company_cells:
+                    company_cells[siren] = []
+                company_cells[siren].append({"cell_id": cell_id, "cell_name": cell.get("name", "")})
+        self.send_json(200, {"cells": cells, "company_cells": company_cells})
+
+    def handle_cell_detail(self):
+        """GET /api/cells/<cell_id> -> get cell details with companies"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        cell_id = self.path.split("/api/cells/")[1].split("?")[0].strip()
+        cells = load_cells()
+        if cell_id not in cells:
+            self.send_json(404, {"error": "Cell not found"})
+            return
+        self.send_json(200, {"cell": cells[cell_id]})
+
+    def handle_cell_create(self):
+        """POST /api/cells { name } -> create a new cell"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        try:
+            body = self.read_body()
+            name = (body.get("name") or "").strip()
+            if not name:
+                self.send_json(400, {"error": "Cell name is required"})
+                return
+            cells = load_cells()
+            cell_id = secrets.token_hex(8)
+            cells[cell_id] = {
+                "name": name,
+                "created_by": auth_user["username"],
+                "created_at": datetime.datetime.utcnow().isoformat() + "Z",
+                "companies": {}
+            }
+            save_cells(cells)
+            log_activity(auth_user["username"], "create_cell", name)
+            self.send_json(200, {"ok": True, "cell_id": cell_id, "cell": cells[cell_id]})
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
+
+    def handle_cell_add_companies(self):
+        """POST /api/cells/<cell_id>/companies { companies: [{siren, name, ...}] } -> add companies to cell"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        try:
+            cell_id = self.path.split("/api/cells/")[1].split("/companies")[0].strip()
+            body = self.read_body()
+            companies = body.get("companies", [])
+            cells = load_cells()
+            if cell_id not in cells:
+                self.send_json(404, {"error": "Cell not found"})
+                return
+            added = 0
+            for comp in companies:
+                siren = str(comp.get("siren", "")).strip()
+                if siren:
+                    cells[cell_id]["companies"][siren] = {
+                        "company_name": comp.get("company_name", ""),
+                        "categorie_entreprise": comp.get("categorie_entreprise", ""),
+                        "commune": comp.get("commune", ""),
+                        "code_postal": comp.get("code_postal", ""),
+                        "added_by": auth_user["username"],
+                        "added_at": datetime.datetime.utcnow().isoformat() + "Z",
+                    }
+                    added += 1
+            save_cells(cells)
+            log_activity(auth_user["username"], "add_to_cell",
+                         f"{added} companies -> {cells[cell_id]['name']}")
+            self.send_json(200, {"ok": True, "added": added})
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
+
+    def handle_cell_remove_company(self):
+        """DELETE /api/cells/<cell_id>/companies/<siren> -> remove company from cell"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        try:
+            parts = self.path.split("/api/cells/")[1]
+            cell_id = parts.split("/companies/")[0].strip()
+            siren = parts.split("/companies/")[1].split("?")[0].strip()
+            cells = load_cells()
+            if cell_id not in cells:
+                self.send_json(404, {"error": "Cell not found"})
+                return
+            company_name = ""
+            if siren in cells[cell_id]["companies"]:
+                company_name = cells[cell_id]["companies"][siren].get("company_name", "")
+                del cells[cell_id]["companies"][siren]
+                save_cells(cells)
+            log_activity(auth_user["username"], "remove_from_cell",
+                         f"{company_name} ({siren}) from {cells[cell_id]['name']}")
+            self.send_json(200, {"ok": True})
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
+
+    def handle_cell_delete(self):
+        """DELETE /api/cells/<cell_id> -> delete entire cell"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        try:
+            cell_id = self.path.split("/api/cells/")[1].split("?")[0].strip()
+            cells = load_cells()
+            cell_name = ""
+            if cell_id in cells:
+                cell_name = cells[cell_id].get("name", "")
+                del cells[cell_id]
+                save_cells(cells)
+            log_activity(auth_user["username"], "delete_cell", cell_name)
+            self.send_json(200, {"ok": True})
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
 
     # ── Activity logging endpoint ─────────────────────
 

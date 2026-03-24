@@ -27,6 +27,13 @@ export function Header({ currentUser, onLogout, onNavigate }) {
               <span className="text-xs">${"\u2605"}</span> Starred
             </a>
 
+            <!-- Cells link (all users) -->
+            <a href="#/cells"
+               className="text-sm text-blue-200 hover:text-white transition-colors flex items-center gap-1"
+               style=${{ textDecoration: "none" }}>
+              <span className="text-xs">${"\uD83D\uDCC1"}</span> Cells
+            </a>
+
             <!-- Admin link (admin only) -->
             ${currentUser.role === "admin" && html`
               <a href="#/admin"

@@ -1,6 +1,7 @@
 import { createElement, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import htm from "htm";
-import { searchCompanies, logActivity, getFlaggedCompanies, flagCompany, unflagCompany } from "./api.js?v=11";
+import { searchCompanies, logActivity, getFlaggedCompanies, flagCompany, unflagCompany,
+         getCells, createCell, addCompaniesToCell } from "./api.js?v=16";
 import { formatSiren, formatCurrency, getEmployeeLabel, getLatestFinance,
          CATEGORY_STYLES, EMPLOYEE_FILTER_OPTIONS,
          INDUSTRY_FILTER_OPTIONS, TURNOVER_FILTER_OPTIONS,
@@ -175,12 +176,19 @@ function SearchFilters({ filters, onChange, onReset }) {
 }
 
 // ── Results Table ───────────────────────────────────
-function ResultsTable({ results, onCompanyClick, onToggleStar, username, flaggedSirens }) {
+function ResultsTable({ results, onCompanyClick, onToggleStar, username, flaggedSirens, selectedSirens, onToggleSelect, onSelectAll, companyCells }) {
+  const allSelected = results.length > 0 && results.every(c => selectedSirens.has(c.siren));
   return html`
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b-2 border-gray-200 text-left text-gray-500 text-xs uppercase tracking-wider">
+            <th className="py-3 px-2 w-8">
+              <input type="checkbox" checked=${allSelected}
+                onChange=${() => onSelectAll(!allSelected)}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                title=${allSelected ? "Deselect all" : "Select all on this page"} />
+            </th>
             <th className="py-3 px-2 w-10"></th>
             <th className="py-3 px-3">Company</th>
             <th className="py-3 px-3">SIREN</th>
@@ -194,10 +202,17 @@ function ResultsTable({ results, onCompanyClick, onToggleStar, username, flagged
             const finance = getLatestFinance(company.finances);
             const catStyle = CATEGORY_STYLES[company.categorie_entreprise];
             const starred = flaggedSirens && flaggedSirens[company.siren];
+            const isSelected = selectedSirens.has(company.siren);
+            const cellList = companyCells && companyCells[company.siren];
             return html`
               <tr key=${company.siren + "-" + i}
-                  className=${"border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors " + (i % 2 === 0 ? "bg-white" : "bg-gray-50")}
+                  className=${"border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors " + (isSelected ? "bg-blue-50 " : (i % 2 === 0 ? "bg-white " : "bg-gray-50 "))}
                   onClick=${() => onCompanyClick(company.siren)}>
+                <td className="py-3 px-2 text-center" onClick=${(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked=${isSelected}
+                    onChange=${() => onToggleSelect(company.siren)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                </td>
                 <td className="py-3 px-2 text-center">
                   <button
                     onClick=${(e) => { e.stopPropagation(); onToggleStar(company.siren, company); }}
@@ -216,6 +231,15 @@ function ResultsTable({ results, onCompanyClick, onToggleStar, username, flagged
                     <span className="block text-xs text-gray-400 mt-0.5">
                       ${company.siege.libelle_commune || ""}${company.siege.code_postal ? " (" + company.siege.code_postal + ")" : ""}
                     </span>
+                  `}
+                  ${cellList && cellList.length > 0 && html`
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      ${cellList.map(c => html`
+                        <span key=${c.cell_id} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-100 text-purple-700 border border-purple-200">
+                          ${"📁"} ${c.cell_name}
+                        </span>
+                      `)}
+                    </div>
                   `}
                 </td>
                 <td className="py-3 px-3 text-gray-600 font-mono text-xs">${formatSiren(company.siren)}</td>
@@ -328,12 +352,24 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
   const [loadingProgress, setLoadingProgress] = useState("");
   const [error, setError] = useState(null);
   const [flaggedSirens, setFlaggedSirens] = useState({});
+  const [selectedSirens, setSelectedSirens] = useState(new Set());
+  const [companyCells, setCompanyCells] = useState({});
+  const [cellsList, setCellsList] = useState({});
+  const [showCellMenu, setShowCellMenu] = useState(false);
+  const [newCellName, setNewCellName] = useState("");
+  const [cellMenuMode, setCellMenuMode] = useState("choose"); // "choose" | "create"
   const abortRef = useRef(null);
 
-  // Load flagged companies from server (shared)
+  // Load flagged companies and cells from server
   useEffect(() => {
     getFlaggedCompanies()
       .then(data => setFlaggedSirens(data))
+      .catch(() => {});
+    getCells()
+      .then(data => {
+        setCellsList(data.cells || {});
+        setCompanyCells(data.company_cells || {});
+      })
       .catch(() => {});
   }, []);
 
@@ -475,6 +511,63 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
     }
   };
 
+  // ── Selection handlers ────────────────────────────
+  const handleToggleSelect = (siren) => {
+    setSelectedSirens(prev => {
+      const next = new Set(prev);
+      if (next.has(siren)) next.delete(siren); else next.add(siren);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (selectAll) => {
+    if (!displayedResults) return;
+    setSelectedSirens(prev => {
+      const next = new Set(prev);
+      displayedResults.forEach(c => {
+        if (selectAll) next.add(c.siren); else next.delete(c.siren);
+      });
+      return next;
+    });
+  };
+
+  // ── Add to cell handlers ─────────────────────────
+  const handleAddToCell = async (cellId) => {
+    if (selectedSirens.size === 0) return;
+    const companies = (sortedResults || [])
+      .filter(c => selectedSirens.has(c.siren))
+      .map(c => ({
+        siren: c.siren,
+        company_name: c.nom_complet || "",
+        categorie_entreprise: c.categorie_entreprise || "",
+        commune: c.siege ? (c.siege.libelle_commune || "") : "",
+        code_postal: c.siege ? (c.siege.code_postal || "") : "",
+      }));
+    try {
+      await addCompaniesToCell(cellId, companies);
+      // Refresh cells data
+      const data = await getCells();
+      setCellsList(data.cells || {});
+      setCompanyCells(data.company_cells || {});
+      setSelectedSirens(new Set());
+      setShowCellMenu(false);
+    } catch (err) {
+      console.error("Add to cell failed:", err);
+    }
+  };
+
+  const handleCreateAndAdd = async () => {
+    if (!newCellName.trim() || selectedSirens.size === 0) return;
+    try {
+      const result = await createCell(newCellName.trim());
+      setNewCellName("");
+      setCellMenuMode("choose");
+      await handleAddToCell(result.cell_id);
+    } catch (err) {
+      console.error("Create cell failed:", err);
+    }
+  };
+
   // Sort all results (memoized to avoid re-sorting on every render)
   const sortedResults = useMemo(() => {
     if (!allResults) return null;
@@ -574,6 +667,10 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
                   onToggleStar=${handleToggleStar}
                   username=${username}
                   flaggedSirens=${flaggedSirens}
+                  selectedSirens=${selectedSirens}
+                  onToggleSelect=${handleToggleSelect}
+                  onSelectAll=${handleSelectAll}
+                  companyCells=${companyCells}
                 />
               </div>
               <${Pagination}
@@ -595,6 +692,70 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
           title="Start a search"
           message="Enter a company name, SIREN, or use the advanced filters"
         />
+      `}
+
+      ${selectedSirens.size > 0 && html`
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-blue-700 text-white shadow-lg border-t-2 border-blue-900"
+             style=${{ padding: "12px 20px" }}>
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <span className="bg-white text-blue-700 font-bold px-2.5 py-0.5 rounded-full text-sm">${selectedSirens.size}</span>
+              <span className="text-sm font-medium">compan${selectedSirens.size === 1 ? "y" : "ies"} selected</span>
+              <button onClick=${() => setSelectedSirens(new Set())}
+                className="text-xs text-blue-200 hover:text-white underline ml-2">Clear selection</button>
+            </div>
+            <div className="relative">
+              <button onClick=${() => { setShowCellMenu(!showCellMenu); setCellMenuMode("choose"); }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white text-blue-700 font-semibold text-sm rounded-lg hover:bg-blue-50 transition-colors shadow">
+                ${"📁"} Add to Cell
+              </button>
+              ${showCellMenu && html`
+                <div className="absolute bottom-full right-0 mb-2 w-72 bg-white rounded-lg shadow-2xl border border-gray-200 text-gray-800 overflow-hidden"
+                     onClick=${(e) => e.stopPropagation()}>
+                  <div className="p-3 border-b border-gray-100 flex gap-2">
+                    <button onClick=${() => setCellMenuMode("choose")}
+                      className=${"flex-1 px-3 py-1.5 text-xs font-medium rounded " + (cellMenuMode === "choose" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                      Existing Cell
+                    </button>
+                    <button onClick=${() => setCellMenuMode("create")}
+                      className=${"flex-1 px-3 py-1.5 text-xs font-medium rounded " + (cellMenuMode === "create" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                      + New Cell
+                    </button>
+                  </div>
+                  ${cellMenuMode === "choose" && html`
+                    <div className="max-h-48 overflow-y-auto">
+                      ${Object.keys(cellsList).length === 0 && html`
+                        <p className="text-xs text-gray-400 p-3 text-center">No cells yet. Create one first.</p>
+                      `}
+                      ${Object.entries(cellsList).map(([id, cell]) => html`
+                        <button key=${id}
+                          onClick=${() => handleAddToCell(id)}
+                          className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-gray-50 transition-colors flex items-center justify-between">
+                          <span className="text-sm font-medium">${"📁"} ${cell.name}</span>
+                          <span className="text-xs text-gray-400">${Object.keys(cell.companies || {}).length} co.</span>
+                        </button>
+                      `)}
+                    </div>
+                  `}
+                  ${cellMenuMode === "create" && html`
+                    <div className="p-3">
+                      <input type="text" value=${newCellName}
+                        onInput=${(e) => setNewCellName(e.target.value)}
+                        onKeyDown=${(e) => { if (e.key === "Enter") handleCreateAndAdd(); }}
+                        placeholder="Cell name (e.g. Provence Winemakers)"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none mb-2" />
+                      <button onClick=${handleCreateAndAdd}
+                        disabled=${!newCellName.trim()}
+                        className="w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                        Create & Add ${selectedSirens.size} compan${selectedSirens.size === 1 ? "y" : "ies"}
+                      </button>
+                    </div>
+                  `}
+                </div>
+              `}
+            </div>
+          </div>
+        </div>
       `}
     </div>
   `;

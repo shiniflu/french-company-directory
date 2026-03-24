@@ -1,12 +1,13 @@
 import { createElement, useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import htm from "htm";
-import { Header, Footer } from "./components.js?v=12";
-import { SearchPage } from "./SearchPage.js?v=15";
+import { Header, Footer } from "./components.js?v=16";
+import { SearchPage } from "./SearchPage.js?v=16";
 import { CompanyPage } from "./CompanyPage.js?v=16";
-import { LoginPage } from "./LoginPage.js?v=11";
-import { AdminPage } from "./AdminPage.js?v=11";
-import { FlaggedPage } from "./FlaggedPage.js?v=12";
+import { LoginPage } from "./LoginPage.js?v=16";
+import { AdminPage } from "./AdminPage.js?v=16";
+import { FlaggedPage } from "./FlaggedPage.js?v=16";
+import { CellsPage } from "./CellsPage.js?v=16";
 import { getUser, logout, validateSession } from "./auth.js?v=11";
 
 const html = htm.bind(createElement);
@@ -24,6 +25,9 @@ function parseHash(hash) {
   }
   if (path === "flagged") {
     return { page: "flagged" };
+  }
+  if (path === "cells") {
+    return { page: "cells" };
   }
   return { page: "search" };
 }
@@ -44,6 +48,8 @@ function useHashRouter() {
       window.location.hash = "#/admin";
     } else if (page === "flagged") {
       window.location.hash = "#/flagged";
+    } else if (page === "cells") {
+      window.location.hash = "#/cells";
     } else if (page === "login") {
       window.location.hash = "#/login";
     } else {
@@ -150,6 +156,18 @@ function App() {
         <${Header} currentUser=${currentUser} onLogout=${handleLogout} onNavigate=${navigate} />
         <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
           <${FlaggedPage} currentUser=${currentUser} onNavigate=${navigate} />
+        </main>
+        <${Footer} />
+      </div>
+    `;
+  }
+
+  if (route.page === "cells") {
+    return html`
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <${Header} currentUser=${currentUser} onLogout=${handleLogout} onNavigate=${navigate} />
+        <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
+          <${CellsPage} currentUser=${currentUser} onNavigate=${navigate} />
         </main>
         <${Footer} />
       </div>

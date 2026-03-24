@@ -298,4 +298,60 @@ export async function logActivity(action, detail = "") {
   }
 }
 
+// ── Cells (Ячейки) ─────────────────────────────────
+
+export async function getCells(signal) {
+  const response = await fetch("/api/cells", { signal, headers: authHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to fetch cells");
+  return data;
+}
+
+export async function getCellDetail(cellId, signal) {
+  const response = await fetch("/api/cells/" + encodeURIComponent(cellId), { signal, headers: authHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to fetch cell");
+  return data.cell;
+}
+
+export async function createCell(name, signal) {
+  const response = await fetch("/api/cells", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ name }), signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to create cell");
+  return data;
+}
+
+export async function addCompaniesToCell(cellId, companies, signal) {
+  const response = await fetch("/api/cells/" + encodeURIComponent(cellId) + "/companies", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ companies }), signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to add companies");
+  return data;
+}
+
+export async function removeCompanyFromCell(cellId, siren, signal) {
+  const response = await fetch("/api/cells/" + encodeURIComponent(cellId) + "/companies/" + encodeURIComponent(siren), {
+    method: "DELETE", headers: authHeaders(), signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to remove company");
+  return data;
+}
+
+export async function deleteCell(cellId, signal) {
+  const response = await fetch("/api/cells/" + encodeURIComponent(cellId), {
+    method: "DELETE", headers: authHeaders(), signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to delete cell");
+  return data;
+}
+
 export { ApiError };

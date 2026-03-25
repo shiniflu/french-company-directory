@@ -1,12 +1,13 @@
 import { createElement, useState, useEffect, useCallback } from "react";
 import htm from "htm";
 import { authFetch } from "./auth.js?v=11";
+import { getUserStats } from "./api.js?v=16";
 
 const html = htm.bind(createElement);
 
 // ── User Management Section ──────────────────────────
 
-function UserManagement({ currentUser }) {
+function UserManagement({ currentUser, onViewUser }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -97,7 +98,12 @@ function UserManagement({ currentUser }) {
             <tbody>
               ${users.map(u => html`
                 <tr key=${u.username} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-2 px-3 font-medium">${u.username}</td>
+                  <td className="py-2 px-3 font-medium">
+                    <button onClick=${() => onViewUser(u.username)}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-medium">
+                      ${u.username}
+                    </button>
+                  </td>
                   <td className="py-2 px-3">
                     <span className=${
                       u.role === "admin"
@@ -390,7 +396,144 @@ function getActionBadgeClass(action) {
 
 // ── Main Admin Page ──────────────────────────────────
 
+// ── User Stats View ──────────────────────────────────
+
+function UserStatsView({ username, onBack }) {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    getUserStats(username)
+      .then(data => setStats(data))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [username]);
+
+  if (loading) return html`<div className="text-center py-8 text-gray-400">Loading stats...</div>`;
+  if (error) return html`<div className="text-center py-8 text-red-500">${error}</div>`;
+  if (!stats) return null;
+
+  const actionLabels = {
+    login: "Logins", logout: "Logouts",
+    star: "Stars Added", unstar: "Stars Removed",
+    lusha_lookup: "Lusha Lookups", kaspr_lookup: "Kaspr Lookups",
+    export: "CSV/JSON Exports", bulk_export: "Bulk Exports",
+    cfo_save: "CFO Saved", cfo_found: "CFO Found",
+    scrape_cfo: "Website Scans",
+    flag_company: "Companies Flagged", unflag_company: "Companies Unflagged",
+    create_user: "Users Created", delete_user: "Users Deleted",
+  };
+
+  const sortedActions = Object.entries(stats.action_counts || {})
+    .sort((a, b) => b[1] - a[1]);
+
+  const sortedDays = Object.entries(stats.activity_by_day || {})
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, 14);
+
+  return html`
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <button onClick=${onBack}
+          className="text-sm text-gray-500 hover:text-gray-700">
+          ← Back to Admin
+        </button>
+        <h2 className="text-xl font-bold text-gray-900">
+          ${"👤"} ${stats.username} — Activity Statistics
+        </h2>
+      </div>
+
+      <!-- Summary Cards -->
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+          <p className="text-2xl font-bold text-gray-900">${stats.total_actions}</p>
+          <p className="text-xs text-gray-500 mt-1">Total Actions</p>
+        </div>
+        <div className="bg-white rounded-lg border border-yellow-200 p-4 text-center">
+          <p className="text-2xl font-bold text-yellow-600">${stats.action_counts.star || 0}</p>
+          <p className="text-xs text-gray-500 mt-1">Stars Added</p>
+        </div>
+        <div className="bg-white rounded-lg border border-blue-200 p-4 text-center">
+          <p className="text-2xl font-bold text-blue-600">${(stats.action_counts.lusha_lookup || 0) + (stats.action_counts.kaspr_lookup || 0)}</p>
+          <p className="text-xs text-gray-500 mt-1">Contact Lookups</p>
+        </div>
+        <div className="bg-white rounded-lg border border-emerald-200 p-4 text-center">
+          <p className="text-2xl font-bold text-emerald-600">${(stats.action_counts.export || 0) + (stats.action_counts.bulk_export || 0)}</p>
+          <p className="text-xs text-gray-500 mt-1">Exports</p>
+        </div>
+      </div>
+
+      <!-- Action Breakdown -->
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+        <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">Action Breakdown</h3>
+        ${sortedActions.length === 0
+          ? html`<p className="text-sm text-gray-400">No activity recorded yet.</p>`
+          : html`
+            <div className="space-y-2">
+              ${sortedActions.map(([action, count]) => html`
+                <div key=${action} className="flex items-center justify-between py-1">
+                  <div className="flex items-center gap-2">
+                    <span className=${getActionBadgeClass(action)}>${action}</span>
+                    <span className="text-xs text-gray-500">${actionLabels[action] || action}</span>
+                  </div>
+                  <span className="text-sm font-bold text-gray-700">${count}</span>
+                </div>
+              `)}
+            </div>
+          `
+        }
+      </div>
+
+      <!-- Activity by Day -->
+      ${sortedDays.length > 0 && html`
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">Activity by Day (last 14 days)</h3>
+          <div className="space-y-1">
+            ${sortedDays.map(([day, count]) => {
+              const maxCount = Math.max(...sortedDays.map(d => d[1]));
+              const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
+              return html`
+                <div key=${day} className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500 w-20 shrink-0">${day}</span>
+                  <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                    <div className="bg-blue-500 h-full rounded-full transition-all" style=${{ width: pct + "%" }}></div>
+                  </div>
+                  <span className="text-xs font-medium text-gray-700 w-8 text-right">${count}</span>
+                </div>
+              `;
+            })}
+          </div>
+        </div>
+      `}
+
+      <!-- Recent Activity -->
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+        <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-3">Recent Activity (last 100)</h3>
+        <div className="max-h-96 overflow-y-auto space-y-1">
+          ${(stats.recent_activity || []).map((e, i) => html`
+            <div key=${i} className="flex items-center gap-3 py-1 border-b border-gray-50 text-sm">
+              <span className="text-xs text-gray-400 w-32 shrink-0">${formatActivityTime(e.ts)}</span>
+              <span className=${getActionBadgeClass(e.action)}>${e.action}</span>
+              <span className="text-gray-600 truncate">${e.detail || ""}</span>
+            </div>
+          `)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Main Admin Page ──────────────────────────────────
+
 export function AdminPage({ currentUser, onNavigate }) {
+  const [viewUser, setViewUser] = useState(null);
+
+  if (viewUser) {
+    return html`<${UserStatsView} username=${viewUser} onBack=${() => setViewUser(null)} />`;
+  }
+
   return html`
     <div className="space-y-6">
       <!-- Page header -->
@@ -408,7 +551,7 @@ export function AdminPage({ currentUser, onNavigate }) {
       </div>
 
       <!-- User management -->
-      <${UserManagement} currentUser=${currentUser} />
+      <${UserManagement} currentUser=${currentUser} onViewUser=${(u) => setViewUser(u)} />
 
       <!-- Stats -->
       <${UsageStats} />

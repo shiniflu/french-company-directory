@@ -231,7 +231,9 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_auth_me()
         elif self.path == "/api/admin/users":
             self.handle_admin_list_users()
-        elif self.path.startswith("/api/admin/stats"):
+        elif self.path.startswith("/api/admin/users/") and self.path.endswith("/stats"):
+            self.handle_user_stats()
+        elif self.path == "/api/admin/stats":
             self.handle_admin_stats()
         else:
             super().do_GET()
@@ -243,6 +245,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_cfo_save()
         elif self.path == "/api/scrape-cfo":
             self.handle_scrape_cfo()
+        elif self.path == "/api/find-email":
+            self.handle_find_email()
         elif self.path.startswith("/api/flagged/"):
             self.handle_flagged_add()
         elif self.path == "/api/cells":
@@ -487,6 +491,44 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             "recent_activity": entries[:50],
         })
 
+    def handle_user_stats(self):
+        """GET /api/admin/users/<username>/stats -> per-user activity statistics"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        if auth_user["role"] != "admin":
+            self.send_json(403, {"error": "Admin access required"})
+            return
+
+        # Extract username from path
+        parts = self.path.split("/")
+        target_user = parts[4] if len(parts) > 4 else ""
+        if not target_user:
+            self.send_json(400, {"error": "Username required"})
+            return
+
+        entries = read_activity_log(5000)
+        user_entries = [e for e in entries if e.get("user") == target_user]
+
+        # Count by action type
+        action_counts = {}
+        by_day = {}
+        for e in user_entries:
+            action = e.get("action", "unknown")
+            action_counts[action] = action_counts.get(action, 0) + 1
+            day = e.get("ts", "")[:10]
+            if day:
+                by_day[day] = by_day.get(day, 0) + 1
+
+        self.send_json(200, {
+            "username": target_user,
+            "total_actions": len(user_entries),
+            "action_counts": action_counts,
+            "activity_by_day": by_day,
+            "recent_activity": user_entries[:100],
+        })
+
     # ── CFO Contact endpoints ──────────────────────────
 
     def handle_cfo_get(self):
@@ -552,6 +594,140 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             save_cfo_contacts(contacts)
             log_activity(auth_user["username"], "cfo_delete", siren)
         self.send_json(200, {"ok": True})
+
+    # ── Find Company Email endpoint ──────────────────────
+
+    def handle_find_email(self):
+        """
+        POST /api/find-email { "siren": "...", "company_name": "..." }
+        Chain: 1) Check cached CFO → 2) Try Lusha for directors → 3) Get company email from registry
+        """
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+
+        try:
+            body = self.read_body()
+            siren = (body.get("siren") or "").strip()
+            company_name = (body.get("company_name") or "").strip()
+
+            if not siren:
+                self.send_json(400, {"error": "siren is required"})
+                return
+
+            log_activity(auth_user["username"], "find_email", f"{company_name} ({siren})")
+
+            # Level 1: Check cached CFO contact
+            cfo_contacts = load_cfo_contacts()
+            if siren in cfo_contacts:
+                cfo = cfo_contacts[siren]
+                emails = cfo.get("emails", [])
+                if emails:
+                    email = emails[0].get("email") or emails[0].get("value") or (emails[0] if isinstance(emails[0], str) else "")
+                    if email:
+                        self.send_json(200, {
+                            "email": email,
+                            "type": "cfo",
+                            "contact_name": f"{cfo.get('firstName', '')} {cfo.get('lastName', '')}".strip(),
+                            "source": "cached_cfo",
+                        })
+                        return
+
+            # Level 2: Try Lusha API for directors with CFO/CEO titles
+            LUSHA_API_KEY = "939a946a-f6d8-4617-b020-6b08535ea8f3"
+            headers = {"api_key": LUSHA_API_KEY, "Accept": "application/json"}
+
+            # Try to get company data from French registry to find director names
+            try:
+                api_url = f"https://recherche-entreprises.api.gouv.fr/search?q={siren}&per_page=1"
+                req = urllib.request.Request(api_url, headers={"Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    api_data = json.loads(resp.read().decode("utf-8"))
+                    results = api_data.get("results", [])
+                    if results:
+                        dirigeants = results[0].get("dirigeants", [])
+                        # Try directors with financial/CEO roles first
+                        cfo_keywords = ["financ", "cfo", "trésor", "tresor", "comptab", "daf",
+                                       "directeur général", "directeur general", "président",
+                                       "president", "ceo", "chief executive"]
+                        priority_dirs = []
+                        other_dirs = []
+                        for d in dirigeants:
+                            if d.get("type_dirigeant") != "personne physique":
+                                continue
+                            qualite = (d.get("qualite") or "").lower()
+                            name_parts = d.get("prenoms", "").split(" ")
+                            first = name_parts[0] if name_parts else ""
+                            last = (d.get("nom") or "").strip()
+                            if not first or not last:
+                                continue
+                            if any(kw in qualite for kw in cfo_keywords):
+                                priority_dirs.append((first, last, d.get("qualite", "")))
+                            else:
+                                other_dirs.append((first, last, d.get("qualite", "")))
+
+                        # Try Lusha for priority directors (CFO/CEO), then others (max 3 total)
+                        for first, last, title in (priority_dirs + other_dirs)[:3]:
+                            try:
+                                lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(first)}&lastName={urllib.parse.quote(last)}&company={urllib.parse.quote(company_name)}"
+                                lusha_req = urllib.request.Request(lusha_url, headers=headers)
+                                with urllib.request.urlopen(lusha_req, timeout=10) as lusha_resp:
+                                    lusha_data = json.loads(lusha_resp.read().decode("utf-8"))
+                                    emails = lusha_data.get("emailAddresses") or lusha_data.get("emails") or []
+                                    if emails:
+                                        email = emails[0].get("email") or emails[0].get("value") or ""
+                                        if email:
+                                            contact_type = "cfo" if any(kw in title.lower() for kw in ["financ", "cfo", "daf", "trésor"]) else "director"
+                                            self.send_json(200, {
+                                                "email": email,
+                                                "type": contact_type,
+                                                "contact_name": f"{first} {last} ({title})",
+                                                "source": "lusha",
+                                            })
+                                            return
+                            except Exception:
+                                continue
+            except Exception:
+                pass
+
+            # Level 4: Get company email from French registry
+            try:
+                api_url = f"https://recherche-entreprises.api.gouv.fr/search?q={siren}&per_page=1"
+                req = urllib.request.Request(api_url, headers={"Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    api_data = json.loads(resp.read().decode("utf-8"))
+                    results = api_data.get("results", [])
+                    if results:
+                        company = results[0]
+                        # Check matching_etablissements for email
+                        for etab in company.get("matching_etablissements", []):
+                            email = etab.get("email") or etab.get("adresse_email") or ""
+                            if email:
+                                self.send_json(200, {
+                                    "email": email,
+                                    "type": "company",
+                                    "contact_name": company.get("nom_complet", ""),
+                                    "source": "registry",
+                                })
+                                return
+                        # Check complements
+                        complements = company.get("complements", {})
+                        if complements.get("email"):
+                            self.send_json(200, {
+                                "email": complements["email"],
+                                "type": "company",
+                                "contact_name": company.get("nom_complet", ""),
+                                "source": "registry",
+                            })
+                            return
+            except Exception:
+                pass
+
+            self.send_json(200, {"error": "No email found", "type": "none"})
+
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
 
     # ── Flagged Companies endpoints ─────────────────────
 

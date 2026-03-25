@@ -278,6 +278,31 @@ export async function scrapeWebsiteForCfo(website, companyName, signal) {
   return data;
 }
 
+// ── Find Company Email ──────────────────────────────
+
+export async function findCompanyEmail(siren, companyName, signal) {
+  const response = await fetch("/api/find-email", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ siren, company_name: companyName }),
+    signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Email search failed");
+  return data;
+}
+
+// ── User Stats ──────────────────────────────────────
+
+export async function getUserStats(username, signal) {
+  const response = await fetch("/api/admin/users/" + encodeURIComponent(username) + "/stats", {
+    signal, headers: authHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to fetch user stats");
+  return data;
+}
+
 // ── Activity Logging ────────────────────────────────
 
 /**

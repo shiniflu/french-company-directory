@@ -24,7 +24,13 @@ LUSHA_API_KEY = "939a946a-f6d8-4617-b020-6b08535ea8f3"
 KASPR_API_KEY = "905c7fd6a35148ddbdf066a4ca1e5e82"
 
 PORT = int(os.environ.get("PORT", 8080))
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+# Use persistent disk path on Render if available, else local data/
+_render_disk = os.environ.get("RENDER_DISK_PATH", "")
+if _render_disk and os.path.isdir(_render_disk):
+    DATA_DIR = os.path.join(_render_disk, "data")
+else:
+    DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+os.makedirs(DATA_DIR, exist_ok=True)
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 ACTIVITY_LOG = os.path.join(DATA_DIR, "activity_log.jsonl")
 CFO_CONTACTS_FILE = os.path.join(DATA_DIR, "cfo_contacts.json")
@@ -626,12 +632,14 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                 if emails:
                     email = emails[0].get("email") or emails[0].get("value") or (emails[0] if isinstance(emails[0], str) else "")
                     if email:
-                        self.send_json(200, {
+                        result = {
                             "email": email,
                             "type": "cfo",
                             "contact_name": f"{cfo.get('firstName', '')} {cfo.get('lastName', '')}".strip(),
                             "source": "cached_cfo",
-                        })
+                        }
+                        self._save_email_to_cell(siren, result)
+                        self.send_json(200, result)
                         return
 
             # Level 2: Try Lusha API for directors with CFO/CEO titles
@@ -670,21 +678,25 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                         # Try Lusha for priority directors (CFO/CEO), then others (max 3 total)
                         for first, last, title in (priority_dirs + other_dirs)[:3]:
                             try:
-                                lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(first)}&lastName={urllib.parse.quote(last)}&company={urllib.parse.quote(company_name)}"
+                                # Clean name: remove parenthetical notes from nom field
+                                clean_last = re.sub(r'\s*\(.*?\)\s*', '', last).strip()
+                                lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(first)}&lastName={urllib.parse.quote(clean_last)}&company={urllib.parse.quote(company_name)}"
                                 lusha_req = urllib.request.Request(lusha_url, headers=headers)
-                                with urllib.request.urlopen(lusha_req, timeout=10) as lusha_resp:
+                                with urllib.request.urlopen(lusha_req, timeout=10, context=ssl_ctx) as lusha_resp:
                                     lusha_data = json.loads(lusha_resp.read().decode("utf-8"))
                                     emails = lusha_data.get("emailAddresses") or lusha_data.get("emails") or []
                                     if emails:
                                         email = emails[0].get("email") or emails[0].get("value") or ""
                                         if email:
                                             contact_type = "cfo" if any(kw in title.lower() for kw in ["financ", "cfo", "daf", "trésor"]) else "director"
-                                            self.send_json(200, {
+                                            result = {
                                                 "email": email,
                                                 "type": contact_type,
                                                 "contact_name": f"{first} {last} ({title})",
                                                 "source": "lusha",
-                                            })
+                                            }
+                                            self._save_email_to_cell(siren, result)
+                                            self.send_json(200, result)
                                             return
                             except Exception:
                                 continue
@@ -704,30 +716,51 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                         for etab in company.get("matching_etablissements", []):
                             email = etab.get("email") or etab.get("adresse_email") or ""
                             if email:
-                                self.send_json(200, {
+                                result = {
                                     "email": email,
                                     "type": "company",
                                     "contact_name": company.get("nom_complet", ""),
                                     "source": "registry",
-                                })
+                                }
+                                self._save_email_to_cell(siren, result)
+                                self.send_json(200, result)
                                 return
                         # Check complements
                         complements = company.get("complements", {})
                         if complements.get("email"):
-                            self.send_json(200, {
+                            result = {
                                 "email": complements["email"],
                                 "type": "company",
                                 "contact_name": company.get("nom_complet", ""),
                                 "source": "registry",
-                            })
+                            }
+                            self._save_email_to_cell(siren, result)
+                            self.send_json(200, result)
                             return
             except Exception:
                 pass
 
-            self.send_json(200, {"error": "No email found", "type": "none"})
+            # Nothing found
+            result = {"error": "No email found", "type": "none"}
+            self._save_email_to_cell(siren, result)
+            self.send_json(200, result)
 
         except Exception as e:
             self.send_json(500, {"error": str(e)})
+
+    def _save_email_to_cell(self, siren, email_result):
+        """Save email search result to any cell containing this company."""
+        try:
+            cells = load_cells()
+            changed = False
+            for cell_id, cell in cells.items():
+                if siren in cell.get("companies", {}):
+                    cell["companies"][siren]["email_result"] = email_result
+                    changed = True
+            if changed:
+                save_cells(cells)
+        except Exception:
+            pass
 
     # ── Flagged Companies endpoints ─────────────────────
 

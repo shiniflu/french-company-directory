@@ -57,7 +57,14 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
   );
 
   const [selected, setSelected] = useState({});
-  const [emailResults, setEmailResults] = useState({});
+  const [emailResults, setEmailResults] = useState(() => {
+    // Load saved email results from cell data
+    const saved = {};
+    companies.forEach(([siren, comp]) => {
+      if (comp.email_result) saved[siren] = comp.email_result;
+    });
+    return saved;
+  });
   const [searching, setSearching] = useState(false);
   const [searchProgress, setSearchProgress] = useState("");
 

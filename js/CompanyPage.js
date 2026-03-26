@@ -1040,10 +1040,10 @@ export function CompanyPage({ siren, onNavigate, currentUser }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <button
-          onClick=${() => onNavigate("search")}
+          onClick=${() => window.history.back()}
           className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
         >
-          ← Back to search
+          ← Back
         </button>
 
         ${!loading && company && html`

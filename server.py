@@ -42,10 +42,29 @@ ssl_ctx = ssl.create_default_context()
 ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
 
-# ── In-memory token store ────────────────────────────
+# ── Persistent token store ────────────────────────────
 # { token_string: { "username": "...", "role": "...", "created_at": "..." } }
-TOKENS = {}
+TOKENS_FILE = os.path.join(DATA_DIR, "tokens.json")
 tokens_lock = threading.Lock()
+
+def _load_tokens():
+    try:
+        if os.path.exists(TOKENS_FILE):
+            with open(TOKENS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def _save_tokens(tokens):
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(TOKENS_FILE, "w", encoding="utf-8") as f:
+            json.dump(tokens, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+TOKENS = _load_tokens()
 
 # ── User management helpers ──────────────────────────
 
@@ -310,6 +329,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                     "role": user["role"],
                     "created_at": datetime.datetime.now().isoformat(),
                 }
+                _save_tokens(TOKENS)
 
             log_activity(username, "login")
 
@@ -331,6 +351,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             token = auth_header[7:]
             with tokens_lock:
                 TOKENS.pop(token, None)
+                _save_tokens(TOKENS)
             log_activity(auth_user["username"], "logout")
         self.send_json(200, {"ok": True})
 
@@ -449,6 +470,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             to_remove = [t for t, u in TOKENS.items() if u["username"] == target]
             for t in to_remove:
                 del TOKENS[t]
+            _save_tokens(TOKENS)
 
         log_activity(auth_user["username"], "delete_user", target)
 

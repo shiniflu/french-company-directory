@@ -44,14 +44,13 @@ export function Header({ currentUser, onLogout, onNavigate }) {
             `}
 
             <!-- User badge -->
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-blue-200">${currentUser.username}</span>
+            <div className="flex items-center gap-1.5">
               <span className=${
                 currentUser.role === "admin"
                   ? "bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full"
                   : "bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full"
               }>
-                ${currentUser.role}
+                ${currentUser.username}
               </span>
             </div>
 

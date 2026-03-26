@@ -4,26 +4,26 @@
 const TOKEN_KEY = "auth_token";
 const USER_KEY = "auth_user";
 
-/** Get stored auth token from sessionStorage */
+/** Get stored auth token from localStorage */
 export function getToken() {
-  return sessionStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 /** Store auth token */
 export function setToken(token) {
-  sessionStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
 /** Clear auth token and user data */
 export function clearToken() {
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(USER_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
 }
 
 /** Get stored user info { username, role } */
 export function getUser() {
   try {
-    const raw = sessionStorage.getItem(USER_KEY);
+    const raw = localStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -32,7 +32,7 @@ export function getUser() {
 
 /** Store user info */
 export function setUser(user) {
-  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
 /**

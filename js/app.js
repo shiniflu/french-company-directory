@@ -8,7 +8,7 @@ import { LoginPage } from "./LoginPage.js?v=16";
 import { AdminPage } from "./AdminPage.js?v=16";
 import { FlaggedPage } from "./FlaggedPage.js?v=16";
 import { CellsPage } from "./CellsPage.js?v=16";
-import { getUser, logout, validateSession } from "./auth.js?v=11";
+import { getUser, logout, validateSession } from "./auth.js?v=17";
 
 const html = htm.bind(createElement);
 

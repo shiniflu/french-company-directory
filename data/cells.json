@@ -64,7 +64,17 @@
         "commune": "PARIS",
         "code_postal": "75017",
         "added_by": "admin",
-        "added_at": "2026-03-27T13:17:37.006713Z"
+        "added_at": "2026-03-27T13:17:37.006713Z",
+        "email_result": {
+          "email": "contact@souvenir.fr",
+          "all_emails": [
+            "contact@souvenir.fr",
+            "info@souvenir.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "LE SOUVENIR FRANCAIS",
+          "source": "domain_pattern"
+        }
       }
     }
   }

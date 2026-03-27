@@ -51,6 +51,98 @@ CFO_CONTACTS_FILE = os.path.join(DATA_DIR, "cfo_contacts.json")
 FLAGGED_COMPANIES_FILE = os.path.join(DATA_DIR, "flagged_companies.json")
 CELLS_FILE = os.path.join(DATA_DIR, "cells.json")
 
+# ── GitHub-backed persistent storage ─────────────────
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_REPO = "shiniflu/french-company-directory"
+GITHUB_SYNC_FILES = ["cells.json", "flagged_companies.json", "cfo_contacts.json"]
+
+def _github_get_file(filepath):
+    """Get file content and SHA from GitHub repo."""
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/data/{filepath}"
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json",
+        })
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            import base64
+            content = base64.b64decode(data["content"]).decode("utf-8")
+            return content, data["sha"]
+    except Exception:
+        return None, None
+
+def _github_put_file(filepath, content, sha=None):
+    """Write file content to GitHub repo."""
+    if not GITHUB_TOKEN:
+        return False
+    try:
+        import base64
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/data/{filepath}"
+        body = {
+            "message": f"Auto-save {filepath}",
+            "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+            "branch": "master",
+        }
+        if sha:
+            body["sha"] = sha
+        data = json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(url, data=data, method="PUT", headers={
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status == 200 or resp.status == 201
+    except Exception as e:
+        print(f"[GITHUB] Failed to save {filepath}: {e}")
+        return False
+
+def github_sync_save(filepath, content_dict):
+    """Save JSON data to local file AND sync to GitHub in background."""
+    # Save locally first
+    local_path = os.path.join(DATA_DIR, filepath)
+    with open(local_path, "w", encoding="utf-8") as f:
+        json.dump(content_dict, f, indent=2, ensure_ascii=False)
+    # Sync to GitHub in background thread
+    if GITHUB_TOKEN:
+        def _sync():
+            content_str = json.dumps(content_dict, indent=2, ensure_ascii=False)
+            _, sha = _github_get_file(filepath)
+            ok = _github_put_file(filepath, content_str, sha)
+            if ok:
+                print(f"[GITHUB] Synced {filepath}")
+        threading.Thread(target=_sync, daemon=True).start()
+
+def github_sync_load(filepath):
+    """Load JSON data: try GitHub first (if token), fallback to local file."""
+    local_path = os.path.join(DATA_DIR, filepath)
+    # On startup, if GitHub has newer data, use it
+    if GITHUB_TOKEN:
+        try:
+            content, _ = _github_get_file(filepath)
+            if content:
+                data = json.loads(content)
+                # Also save locally for fast access
+                with open(local_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                print(f"[GITHUB] Loaded {filepath} from GitHub")
+                return data
+        except Exception:
+            pass
+    # Fallback to local
+    if os.path.exists(local_path):
+        with open(local_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+# On startup: sync data from GitHub
+for _sync_file in GITHUB_SYNC_FILES:
+    try:
+        github_sync_load(_sync_file)
+    except Exception:
+        pass
+
 # Allow unverified SSL for proxied requests (some corporate networks)
 ssl_ctx = ssl.create_default_context()
 ssl_ctx.check_hostname = False
@@ -96,43 +188,37 @@ def save_users(users):
         json.dump(users, f, indent=2, ensure_ascii=False)
 
 def load_cfo_contacts():
-    """Load CFO contacts from JSON file."""
+    """Load CFO contacts — from local file (GitHub-synced on startup)."""
     if not os.path.exists(CFO_CONTACTS_FILE):
         return {}
     with open(CFO_CONTACTS_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 def save_cfo_contacts(contacts):
-    """Save CFO contacts to JSON file."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(CFO_CONTACTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(contacts, f, indent=2, ensure_ascii=False)
+    """Save CFO contacts locally + sync to GitHub."""
+    github_sync_save("cfo_contacts.json", contacts)
 
 def load_flagged_companies():
-    """Load flagged companies from JSON file."""
+    """Load flagged companies — from local file (GitHub-synced on startup)."""
     if not os.path.exists(FLAGGED_COMPANIES_FILE):
         return {}
     with open(FLAGGED_COMPANIES_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 def save_flagged_companies(flagged):
-    """Save flagged companies to JSON file."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(FLAGGED_COMPANIES_FILE, "w", encoding="utf-8") as f:
-        json.dump(flagged, f, indent=2, ensure_ascii=False)
+    """Save flagged companies locally + sync to GitHub."""
+    github_sync_save("flagged_companies.json", flagged)
 
 def load_cells():
-    """Load cells from JSON file. Structure: { "cell_id": { "name": "...", "created_by": "...", "created_at": "...", "companies": { "siren": { metadata } } } }"""
+    """Load cells — from local file (GitHub-synced on startup)."""
     if not os.path.exists(CELLS_FILE):
         return {}
     with open(CELLS_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 def save_cells(cells):
-    """Save cells to JSON file."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(CELLS_FILE, "w", encoding="utf-8") as f:
-        json.dump(cells, f, indent=2, ensure_ascii=False)
+    """Save cells locally + sync to GitHub."""
+    github_sync_save("cells.json", cells)
 
 def hash_password(password, salt=None):
     """Hash password with SHA-256 + salt. Returns (hash, salt)."""

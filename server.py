@@ -24,13 +24,27 @@ LUSHA_API_KEY = "939a946a-f6d8-4617-b020-6b08535ea8f3"
 KASPR_API_KEY = "905c7fd6a35148ddbdf066a4ca1e5e82"
 
 PORT = int(os.environ.get("PORT", 8080))
-# Use persistent disk path on Render if available, else local data/
+# Data directory: use RENDER_DISK_PATH if available, else /tmp/app-data on Render, else local data/
 _render_disk = os.environ.get("RENDER_DISK_PATH", "")
+_is_render = os.environ.get("RENDER", "")
+REPO_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 if _render_disk and os.path.isdir(_render_disk):
     DATA_DIR = os.path.join(_render_disk, "data")
+elif _is_render:
+    # Render free tier: use /tmp which is writable (survives within same deploy)
+    DATA_DIR = "/tmp/app-data"
 else:
-    DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    DATA_DIR = REPO_DATA_DIR
 os.makedirs(DATA_DIR, exist_ok=True)
+# Copy seed data from repo to DATA_DIR if files don't exist yet
+if DATA_DIR != REPO_DATA_DIR and os.path.isdir(REPO_DATA_DIR):
+    import shutil
+    for fname in os.listdir(REPO_DATA_DIR):
+        src = os.path.join(REPO_DATA_DIR, fname)
+        dst = os.path.join(DATA_DIR, fname)
+        if os.path.isfile(src) and not os.path.exists(dst):
+            shutil.copy2(src, dst)
+            print(f"[INIT] Copied seed data: {fname}")
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 ACTIVITY_LOG = os.path.join(DATA_DIR, "activity_log.jsonl")
 CFO_CONTACTS_FILE = os.path.join(DATA_DIR, "cfo_contacts.json")
@@ -1020,7 +1034,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             for comp in companies:
                 siren = str(comp.get("siren", "")).strip()
                 if siren:
-                    cells[cell_id]["companies"][siren] = {
+                    company_data = {
                         "company_name": comp.get("company_name", ""),
                         "categorie_entreprise": comp.get("categorie_entreprise", ""),
                         "commune": comp.get("commune", ""),
@@ -1028,6 +1042,51 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                         "added_by": auth_user["username"],
                         "added_at": datetime.datetime.utcnow().isoformat() + "Z",
                     }
+                    # Auto-find first director contact from French registry
+                    try:
+                        api_url = f"https://recherche-entreprises.api.gouv.fr/search?q={siren}&per_page=1"
+                        req = urllib.request.Request(api_url, headers={"Accept": "application/json"})
+                        with urllib.request.urlopen(req, timeout=8) as resp:
+                            api_data = json.loads(resp.read().decode("utf-8"))
+                            results = api_data.get("results", [])
+                            if results:
+                                dirigeants = results[0].get("dirigeants", [])
+                                # Find first individual director
+                                for d in dirigeants:
+                                    if d.get("type_dirigeant") != "personne physique":
+                                        continue
+                                    prenoms = d.get("prenoms", "")
+                                    nom = re.sub(r'\s*\(.*?\)\s*', '', d.get("nom", "")).strip()
+                                    first = prenoms.split(" ")[0] if prenoms else ""
+                                    qualite = d.get("qualite", "")
+                                    if first and nom:
+                                        company_data["first_contact"] = {
+                                            "first_name": first,
+                                            "last_name": nom,
+                                            "role": qualite,
+                                        }
+                                        # Try Lusha for this director's email/phone
+                                        try:
+                                            lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(first)}&lastName={urllib.parse.quote(nom)}&company={urllib.parse.quote(comp.get('company_name', ''))}"
+                                            lusha_req = urllib.request.Request(lusha_url, headers={"api_key": LUSHA_API_KEY, "Accept": "application/json"})
+                                            with urllib.request.urlopen(lusha_req, timeout=8, context=ssl_ctx) as lusha_resp:
+                                                lusha_data = json.loads(lusha_resp.read().decode("utf-8"))
+                                                emails = lusha_data.get("emailAddresses") or lusha_data.get("emails") or []
+                                                phones = lusha_data.get("phoneNumbers") or lusha_data.get("phones") or []
+                                                if emails:
+                                                    e = emails[0]
+                                                    company_data["first_contact"]["email"] = e.get("email") or e.get("value") or (e if isinstance(e, str) else "")
+                                                if phones:
+                                                    p = phones[0]
+                                                    company_data["first_contact"]["phone"] = p.get("internationalNumber") or p.get("number") or p.get("localNumber") or (p if isinstance(p, str) else "")
+                                                company_data["first_contact"]["source"] = "lusha"
+                                        except Exception:
+                                            company_data["first_contact"]["source"] = "registry"
+                                        break  # only first director
+                    except Exception:
+                        pass
+
+                    cells[cell_id]["companies"][siren] = company_data
                     added += 1
             save_cells(cells)
             log_activity(auth_user["username"], "add_to_cell",

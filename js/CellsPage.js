@@ -222,6 +222,26 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                           `}
                         </div>
                       `}
+                      ${comp.first_contact && html`
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
+                            ${"👤"} ${comp.first_contact.first_name} ${comp.first_contact.last_name}
+                            ${comp.first_contact.role ? html` <span className="text-sky-500">— ${comp.first_contact.role}</span>` : ""}
+                          </span>
+                          ${comp.first_contact.email && html`
+                            <a href=${"mailto:" + comp.first_contact.email}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
+                              ${"📧"} ${comp.first_contact.email}
+                            </a>
+                          `}
+                          ${comp.first_contact.phone && html`
+                            <a href=${"tel:" + comp.first_contact.phone}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 font-mono">
+                              ${"📱"} ${comp.first_contact.phone}
+                            </a>
+                          `}
+                        </div>
+                      `}
                     </td>
                     <td className="py-3 px-3 text-gray-600 font-mono text-xs">${formatSiren(siren)}</td>
                     <td className="py-3 px-3 hidden sm:table-cell text-gray-500 text-xs">

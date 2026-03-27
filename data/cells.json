@@ -1,0 +1,58 @@
+{
+  "b07b2b2aaadfbe94": {
+    "name": "Energy Companies",
+    "created_by": "admin",
+    "created_at": "2026-03-24T10:18:06.406318Z",
+    "companies": {
+      "542107651": {
+        "company_name": "ENGIE",
+        "categorie_entreprise": "GE",
+        "commune": "LA GARENNE-COLOMBES",
+        "code_postal": "92250",
+        "added_by": "admin",
+        "added_at": "2026-03-24T10:18:06.663096Z",
+        "email_result": {
+          "error": "No email found",
+          "type": "none"
+        }
+      },
+      "552046955": {
+        "company_name": "ENGIE ENERGIE SERVICES (ENGIE E.S.)",
+        "categorie_entreprise": "GE",
+        "commune": "LA GARENNE-COLOMBES",
+        "code_postal": "92250",
+        "added_by": "admin",
+        "added_at": "2026-03-24T10:18:06.663096Z"
+      },
+      "301340584": {
+        "company_name": "ENGIE HOME SERVICES (CGST)",
+        "categorie_entreprise": "GE",
+        "commune": "COURBEVOIE",
+        "code_postal": "92400",
+        "added_by": "admin",
+        "added_at": "2026-03-24T10:18:06.663096Z"
+      }
+    }
+  },
+  "53ed0d65e85773c6": {
+    "name": "Test Auto Contact",
+    "created_by": "admin",
+    "created_at": "2026-03-27T09:38:58.354515Z",
+    "companies": {
+      "380129866": {
+        "company_name": "ORANGE",
+        "categorie_entreprise": "GE",
+        "commune": "PARIS",
+        "code_postal": "75015",
+        "added_by": "admin",
+        "added_at": "2026-03-27T09:39:42.635602Z",
+        "first_contact": {
+          "first_name": "JACQUES",
+          "last_name": "ASCHENBROICH",
+          "role": "Président du conseil d'administration",
+          "source": "registry"
+        }
+      }
+    }
+  }
+}

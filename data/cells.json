@@ -56,7 +56,17 @@
         "commune": "PARIS",
         "code_postal": "75009",
         "added_by": "admin",
-        "added_at": "2026-03-27T13:17:36.342779Z"
+        "added_at": "2026-03-27T13:17:36.342779Z",
+        "email_result": {
+          "email": "contact@hellobank.fr",
+          "all_emails": [
+            "contact@hellobank.fr",
+            "info@hellobank.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "BNP PARIBAS (HELLO BANK!)",
+          "source": "domain_pattern"
+        }
       },
       "775676182": {
         "company_name": "LE SOUVENIR FRANCAIS",

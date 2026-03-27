@@ -40,6 +40,16 @@
           "last_name": "AGOSTINI",
           "role": "Administrateur",
           "source": "registry"
+        },
+        "email_result": {
+          "email": "contact@sncf.fr",
+          "all_emails": [
+            "contact@sncf.fr",
+            "info@sncf.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "SNCF RESEAU",
+          "source": "domain_pattern"
         }
       },
       "775672272": {

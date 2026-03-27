@@ -93,10 +93,16 @@ def _github_put_file(filepath, content, sha=None):
             "Content-Type": "application/json",
         })
         with urllib.request.urlopen(req, timeout=15) as resp:
-            return resp.status == 200 or resp.status == 201
+            return resp.status in (200, 201)
+    except urllib.error.HTTPError as e:
+        # 409 = SHA conflict, 422 = validation error — caller should retry
+        print(f"[GITHUB] HTTP {e.code} saving {filepath}: {e.reason}")
+        return False
     except Exception as e:
         print(f"[GITHUB] Failed to save {filepath}: {e}")
         return False
+
+_github_sync_lock = threading.Lock()
 
 def github_sync_save(filepath, content_dict):
     """Save JSON data to local file AND sync to GitHub in background."""
@@ -104,14 +110,20 @@ def github_sync_save(filepath, content_dict):
     local_path = os.path.join(DATA_DIR, filepath)
     with open(local_path, "w", encoding="utf-8") as f:
         json.dump(content_dict, f, indent=2, ensure_ascii=False)
-    # Sync to GitHub in background thread
+    # Sync to GitHub in background thread (with lock to avoid SHA conflicts)
     if GITHUB_TOKEN:
         def _sync():
-            content_str = json.dumps(content_dict, indent=2, ensure_ascii=False)
-            _, sha = _github_get_file(filepath)
-            ok = _github_put_file(filepath, content_str, sha)
-            if ok:
-                print(f"[GITHUB] Synced {filepath}")
+            with _github_sync_lock:
+                content_str = json.dumps(content_dict, indent=2, ensure_ascii=False)
+                for attempt in range(3):
+                    _, sha = _github_get_file(filepath)
+                    ok = _github_put_file(filepath, content_str, sha)
+                    if ok:
+                        print(f"[GITHUB] Synced {filepath}")
+                        return
+                    import time
+                    time.sleep(1)
+                print(f"[GITHUB] FAILED to sync {filepath} after 3 attempts")
         threading.Thread(target=_sync, daemon=True).start()
 
 def github_sync_load(filepath):

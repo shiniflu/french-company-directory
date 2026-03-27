@@ -89,7 +89,26 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
     setExpandedEmail(prev => ({ ...prev, [siren]: !prev[siren] }));
   };
 
-  // Find Email chain: Website scraping → Lusha → Domain pattern
+  // Find ALL emails for all companies in cell
+  const handleFindAllEmails = async () => {
+    const allComps = companies.map(([s, c]) => ({ siren: s, ...c }));
+    if (allComps.length === 0) return;
+    setSearching(true);
+    for (let i = 0; i < allComps.length; i++) {
+      const comp = allComps[i];
+      setSearchProgress((i + 1) + "/" + allComps.length + ": " + (comp.company_name || comp.siren));
+      try {
+        const result = await findCompanyEmail(comp.siren, comp.company_name || "");
+        setEmailResults(prev => ({ ...prev, [comp.siren]: result }));
+      } catch (e) {
+        setEmailResults(prev => ({ ...prev, [comp.siren]: { error: e.message } }));
+      }
+    }
+    setSearching(false);
+    setSearchProgress("");
+  };
+
+  // Find emails for SELECTED companies only
   const handleFindEmails = async () => {
     const sirens = companies.filter(([s]) => selected[s]).map(([s, c]) => ({ siren: s, ...c }));
     if (sirens.length === 0) return;
@@ -110,7 +129,7 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
 
   return html`
     <div>
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <button onClick=${onBack}
           className="text-blue-600 hover:text-blue-800 text-sm font-medium">
           ${"←"} Back to cells
@@ -118,6 +137,13 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
         <span className="text-gray-300">|</span>
         <h2 className="text-xl font-bold text-gray-900">${"📁"} ${cell.name}</h2>
         <span className="text-sm text-gray-400">(${companies.length} compan${companies.length === 1 ? "y" : "ies"})</span>
+        ${companies.length > 0 && html`
+          <button onClick=${() => handleFindAllEmails()}
+            disabled=${searching}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors disabled:opacity-50 ml-auto">
+            ${searching ? "🔄 " + searchProgress : "🔄 Refresh All Contacts"}
+          </button>
+        `}
       </div>
 
       ${selectedCount > 0 && html`

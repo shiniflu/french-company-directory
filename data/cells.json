@@ -9,6 +9,15 @@
     "name": "Persistence Test",
     "created_by": "admin",
     "created_at": "2026-03-27T10:37:37.856574Z",
-    "companies": {}
+    "companies": {
+      "356000000": {
+        "company_name": "LA POSTE",
+        "categorie_entreprise": "GE",
+        "commune": "PARIS",
+        "code_postal": "75015",
+        "added_by": "admin",
+        "added_at": "2026-03-27T10:40:27.498885Z"
+      }
+    }
   }
 }

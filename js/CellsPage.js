@@ -177,51 +177,16 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                           ${comp.company_name || siren}
                         </a>
                         ${emailInfo && !emailInfo.error && html`
-                          <button onClick=${(e) => { e.stopPropagation(); toggleEmailDetail(siren); }}
-                            className=${"inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full cursor-pointer hover:opacity-80 transition-opacity " +
+                          <span className=${"inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full " +
                             (emailInfo.type === "cfo" ? "bg-emerald-100 text-emerald-800 border border-emerald-300" :
                              emailInfo.type === "director" ? "bg-blue-100 text-blue-800 border border-blue-300" :
                              emailInfo.type === "company_guess" ? "bg-amber-100 text-amber-800 border border-amber-300" :
                              "bg-gray-100 text-gray-700 border border-gray-300")}>
-                            ${"📧"} ${emailInfo.type === "cfo" ? "CFO" : emailInfo.type === "director" ? "Director" : emailInfo.type === "company_guess" ? "Company (guess)" : "Company"}
-                          </button>
-                        `}
-                        ${emailInfo && emailInfo.error && html`
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-50 text-red-600 border border-red-200">
-                            ${"⚠"} Not found
+                            ${"📧"} ${emailInfo.type === "cfo" ? "CFO" : emailInfo.type === "director" ? "Director" : emailInfo.type === "company_guess" ? "Guess" : "Company"}
                           </span>
                         `}
                       </div>
-                      ${expandedEmail[siren] && emailInfo && emailInfo.email && html`
-                        <div className="mt-2 p-2 bg-blue-50 rounded-md border border-blue-200 text-xs">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-gray-700">${"📧"} Email:</span>
-                            <a href=${"mailto:" + emailInfo.email} className="text-blue-700 hover:underline font-mono">${emailInfo.email}</a>
-                          </div>
-                          ${emailInfo.contact_name && html`
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-bold text-gray-700">${"👤"} Contact:</span>
-                              <span className="text-gray-600">${emailInfo.contact_name}</span>
-                            </div>
-                          `}
-                          ${emailInfo.source && html`
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-bold text-gray-700">${"🔍"} Source:</span>
-                              <span className="text-gray-500">${emailInfo.source}</span>
-                            </div>
-                          `}
-                          ${emailInfo.all_emails && emailInfo.all_emails.length > 1 && html`
-                            <div className="mt-1 pt-1 border-t border-blue-200">
-                              <span className="font-bold text-gray-700">All found emails:</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                ${emailInfo.all_emails.map(e => html`
-                                  <a key=${e} href=${"mailto:" + e} className="text-blue-600 hover:underline font-mono bg-white px-1.5 py-0.5 rounded border border-blue-100">${e}</a>
-                                `)}
-                              </div>
-                            </div>
-                          `}
-                        </div>
-                      `}
+
                       ${comp.first_contact && html`
                         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
@@ -240,6 +205,31 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                               ${"📱"} ${comp.first_contact.phone}
                             </a>
                           `}
+                        </div>
+                      `}
+
+                      ${emailInfo && emailInfo.email && html`
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                          <a href=${"mailto:" + emailInfo.email}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 font-mono">
+                            ${"🌐"} ${emailInfo.email}
+                          </a>
+                          ${emailInfo.contact_name && emailInfo.type !== "company_guess" && html`
+                            <span className="text-gray-400">${emailInfo.contact_name}</span>
+                          `}
+                          ${emailInfo.source && html`
+                            <span className="text-gray-300 text-[10px]">(${emailInfo.source})</span>
+                          `}
+                        </div>
+                      `}
+                      ${emailInfo && emailInfo.all_emails && emailInfo.all_emails.length > 1 && html`
+                        <div className="mt-1 flex flex-wrap gap-1 text-xs">
+                          ${emailInfo.all_emails.slice(1).map(e => html`
+                            <a key=${e} href=${"mailto:" + e}
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100 font-mono text-[10px]">
+                              ${e}
+                            </a>
+                          `)}
                         </div>
                       `}
                     </td>

@@ -861,6 +861,38 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                         self.send_json(200, result)
                         return
 
+            # ── Pre-fetch: Get first director from French registry ──
+            first_director = None
+            all_dirs = []
+            try:
+                api_url = f"https://recherche-entreprises.api.gouv.fr/search?q={siren}&per_page=1"
+                req = urllib.request.Request(api_url, headers={"Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    api_data = json.loads(resp.read().decode("utf-8"))
+                    results = api_data.get("results", [])
+                    if results:
+                        dirigeants = results[0].get("dirigeants", [])
+                        cfo_keywords = ["financ", "cfo", "trésor", "tresor", "comptab", "daf",
+                                       "directeur général", "directeur general", "président",
+                                       "president", "ceo", "chief executive"]
+                        for d in dirigeants:
+                            if d.get("type_dirigeant") != "personne physique":
+                                continue
+                            qualite = (d.get("qualite") or "").lower()
+                            name_parts = d.get("prenoms", "").split(" ")
+                            first = name_parts[0] if name_parts else ""
+                            last = re.sub(r'\s*\(.*?\)\s*', '', (d.get("nom") or "")).strip()
+                            if first and last:
+                                is_cfo = any(kw in qualite for kw in cfo_keywords)
+                                all_dirs.append({"name": f"{first} {last}", "title": d.get("qualite", ""),
+                                                 "first": first, "last": last, "is_cfo": is_cfo})
+                        # Sort: CFO/CEO first
+                        all_dirs.sort(key=lambda x: (0 if x["is_cfo"] else 1))
+                        if all_dirs:
+                            first_director = {"name": all_dirs[0]["name"], "title": all_dirs[0]["title"], "is_cfo": all_dirs[0]["is_cfo"]}
+            except Exception:
+                pass
+
             # ── Level 2: Scrape company website (LCEN - mentions légales) ──
             # By French law (LCEN), every company must publish legal info including emails
             domains = self._guess_domains(company_name)
@@ -900,63 +932,37 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                     "type": "company",
                     "contact_name": company_name,
                     "source": f"website ({found_domain})",
+                    "director": first_director,
                 }
                 self._save_email_to_cell(siren, result)
                 self.send_json(200, result)
                 return
 
-            # ── Level 3: Try Lusha API for directors ──
+            # ── Level 3: Try Lusha API for directors (reuse pre-fetched list) ──
             LUSHA_API_KEY = "939a946a-f6d8-4617-b020-6b08535ea8f3"
             lusha_headers = {"api_key": LUSHA_API_KEY, "Accept": "application/json"}
-            try:
-                api_url = f"https://recherche-entreprises.api.gouv.fr/search?q={siren}&per_page=1"
-                req = urllib.request.Request(api_url, headers={"Accept": "application/json"})
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    api_data = json.loads(resp.read().decode("utf-8"))
-                    results = api_data.get("results", [])
-                    if results:
-                        dirigeants = results[0].get("dirigeants", [])
-                        cfo_keywords = ["financ", "cfo", "trésor", "tresor", "comptab", "daf",
-                                       "directeur général", "directeur general", "président",
-                                       "president", "ceo", "chief executive"]
-                        dirs_to_try = []
-                        for d in dirigeants:
-                            if d.get("type_dirigeant") != "personne physique":
-                                continue
-                            qualite = (d.get("qualite") or "").lower()
-                            name_parts = d.get("prenoms", "").split(" ")
-                            first = name_parts[0] if name_parts else ""
-                            last = re.sub(r'\s*\(.*?\)\s*', '', (d.get("nom") or "")).strip()
-                            if first and last:
-                                is_cfo = any(kw in qualite for kw in cfo_keywords)
-                                dirs_to_try.append((first, last, d.get("qualite", ""), is_cfo))
-                        # Sort: CFO/CEO first
-                        dirs_to_try.sort(key=lambda x: (0 if x[3] else 1))
-                        for first, last, title, is_cfo in dirs_to_try[:2]:
-                            try:
-                                lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(first)}&lastName={urllib.parse.quote(last)}&company={urllib.parse.quote(company_name)}"
-                                lusha_req = urllib.request.Request(lusha_url, headers=lusha_headers)
-                                with urllib.request.urlopen(lusha_req, timeout=10, context=ssl_ctx) as lusha_resp:
-                                    lusha_data = json.loads(lusha_resp.read().decode("utf-8"))
-                                    emails = lusha_data.get("emailAddresses") or lusha_data.get("emails") or []
-                                    if emails:
-                                        email = emails[0].get("email") or emails[0].get("value") or ""
-                                        if email:
-                                            ct = "cfo" if is_cfo else "director"
-                                            result = {"email": email, "type": ct,
-                                                      "contact_name": f"{first} {last} ({title})", "source": "lusha"}
-                                            self._save_email_to_cell(siren, result)
-                                            self.send_json(200, result)
-                                            return
-                            except Exception:
-                                continue
-            except Exception:
-                pass
+            for d_info in all_dirs[:2]:
+                try:
+                    lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(d_info['first'])}&lastName={urllib.parse.quote(d_info['last'])}&company={urllib.parse.quote(company_name)}"
+                    lusha_req = urllib.request.Request(lusha_url, headers=lusha_headers)
+                    with urllib.request.urlopen(lusha_req, timeout=10, context=ssl_ctx) as lusha_resp:
+                        lusha_data = json.loads(lusha_resp.read().decode("utf-8"))
+                        emails = lusha_data.get("emailAddresses") or lusha_data.get("emails") or []
+                        if emails:
+                            email = emails[0].get("email") or emails[0].get("value") or ""
+                            if email:
+                                ct = "cfo" if d_info["is_cfo"] else "director"
+                                result = {"email": email, "type": ct,
+                                          "contact_name": f"{d_info['name']} ({d_info['title']})", "source": "lusha",
+                                          "director": first_director}
+                                self._save_email_to_cell(siren, result)
+                                self.send_json(200, result)
+                                return
+                except Exception:
+                    continue
 
             # ── Level 4: Build email from domain pattern + director name ──
-            # If we found a domain earlier but no email, try firstname.lastname@domain
             if not found_domain and domains:
-                # Quick check: does the first domain resolve?
                 for d in domains[:2]:
                     test_emails = self._scrape_url_for_emails(f"https://{d}", timeout=4)
                     if test_emails:
@@ -967,6 +973,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                             "type": "company",
                             "contact_name": company_name,
                             "source": f"website ({d})",
+                            "director": first_director,
                         }
                         self._save_email_to_cell(siren, result)
                         self.send_json(200, result)
@@ -974,7 +981,6 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
 
             # ── Level 5: Construct generic email as last resort ──
             if domains:
-                # Use first likely domain and construct contact@ email
                 for d in domains[:2]:
                     d_clean = d.replace("www.", "")
                     generic_email = f"contact@{d_clean}"
@@ -984,13 +990,14 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                         "type": "company_guess",
                         "contact_name": company_name,
                         "source": "domain_pattern",
+                        "director": first_director,
                     }
                     self._save_email_to_cell(siren, result)
                     self.send_json(200, result)
                     return
 
             # Nothing found at all
-            result = {"error": "No email found", "type": "none"}
+            result = {"error": "No email found", "type": "none", "director": first_director}
             self._save_email_to_cell(siren, result)
             self.send_json(200, result)
 

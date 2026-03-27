@@ -211,7 +211,39 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                             ${"📧"} ${emailInfo.type === "cfo" ? "CFO" : emailInfo.type === "director" ? "Director" : emailInfo.type === "company_guess" ? "Guess" : "Company"}
                           </span>
                         `}
+                        ${emailInfo && emailInfo.error && html`
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-50 text-red-600 border border-red-200">
+                            ${"⚠"} Not found
+                          </span>
+                        `}
                       </div>
+
+                      ${emailInfo && emailInfo.director && html`
+                        <div className="mt-1 flex items-center gap-2 text-xs">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
+                            ${"👤"} ${emailInfo.director.name}
+                            <span className="text-sky-500">— ${emailInfo.director.title}</span>
+                          </span>
+                        </div>
+                      `}
+                      ${emailInfo && emailInfo.email && html`
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                          <a href=${"mailto:" + emailInfo.email}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
+                            ${"📧"} ${emailInfo.email}
+                          </a>
+                          <span className="text-gray-400">(${emailInfo.source || ""})</span>
+                        </div>
+                      `}
+                      ${emailInfo && emailInfo.all_emails && emailInfo.all_emails.length > 1 && html`
+                        <div className="mt-0.5 flex flex-wrap gap-1 text-xs">
+                          ${emailInfo.all_emails.slice(1, 3).map(e => html`
+                            <span key=${e} className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-200">
+                              ${e}
+                            </span>
+                          `)}
+                        </div>
+                      `}
 
                       ${comp.first_contact && html`
                         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">

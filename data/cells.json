@@ -16,7 +16,17 @@
         "commune": "PARIS",
         "code_postal": "75015",
         "added_by": "admin",
-        "added_at": "2026-03-27T10:40:27.498885Z"
+        "added_at": "2026-03-27T10:40:27.498885Z",
+        "email_result": {
+          "email": "contact@poste.fr",
+          "all_emails": [
+            "contact@poste.fr",
+            "info@poste.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "LA POSTE",
+          "source": "domain_pattern"
+        }
       }
     }
   }

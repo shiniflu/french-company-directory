@@ -48,7 +48,17 @@
         "commune": "PARIS",
         "code_postal": "75014",
         "added_by": "admin",
-        "added_at": "2026-03-27T13:17:35.659868Z"
+        "added_at": "2026-03-27T13:17:35.659868Z",
+        "email_result": {
+          "email": "contact@crf.fr",
+          "all_emails": [
+            "contact@crf.fr",
+            "info@crf.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "CROIX ROUGE FRANCAISE (CRF)",
+          "source": "domain_pattern"
+        }
       },
       "662042449": {
         "company_name": "BNP PARIBAS (HELLO BANK!)",

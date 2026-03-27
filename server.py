@@ -354,7 +354,15 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
     # ── Route dispatch ────────────────────────────────
 
     def do_GET(self):
-        if self.path.startswith("/api/lusha"):
+        if self.path == "/api/health":
+            self.send_json(200, {
+                "status": "ok",
+                "github_sync": bool(GITHUB_TOKEN),
+                "data_dir": DATA_DIR,
+                "is_render": bool(os.environ.get("RENDER", "")),
+            })
+            return
+        elif self.path.startswith("/api/lusha"):
             self.handle_lusha()
         elif self.path.startswith("/api/cfo/"):
             self.handle_cfo_get()

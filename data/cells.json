@@ -27,6 +27,44 @@
           "contact_name": "LA POSTE",
           "source": "domain_pattern"
         }
+      },
+      "412280737": {
+        "company_name": "SNCF RESEAU",
+        "categorie_entreprise": "GE",
+        "commune": "SAINT-DENIS",
+        "code_postal": "93200",
+        "added_by": "admin",
+        "added_at": "2026-03-27T13:17:34.891891Z",
+        "first_contact": {
+          "first_name": "NACERA",
+          "last_name": "AGOSTINI",
+          "role": "Administrateur",
+          "source": "registry"
+        }
+      },
+      "775672272": {
+        "company_name": "CROIX ROUGE FRANCAISE (CRF)",
+        "categorie_entreprise": "GE",
+        "commune": "PARIS",
+        "code_postal": "75014",
+        "added_by": "admin",
+        "added_at": "2026-03-27T13:17:35.659868Z"
+      },
+      "662042449": {
+        "company_name": "BNP PARIBAS (HELLO BANK!)",
+        "categorie_entreprise": "GE",
+        "commune": "PARIS",
+        "code_postal": "75009",
+        "added_by": "admin",
+        "added_at": "2026-03-27T13:17:36.342779Z"
+      },
+      "775676182": {
+        "company_name": "LE SOUVENIR FRANCAIS",
+        "categorie_entreprise": "PME",
+        "commune": "PARIS",
+        "code_postal": "75017",
+        "added_by": "admin",
+        "added_at": "2026-03-27T13:17:37.006713Z"
       }
     }
   }

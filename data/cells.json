@@ -61,7 +61,8 @@
           ],
           "type": "company_guess",
           "contact_name": "CROIX ROUGE FRANCAISE (CRF)",
-          "source": "domain_pattern"
+          "source": "domain_pattern",
+          "director": null
         }
       },
       "662042449": {

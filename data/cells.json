@@ -97,7 +97,8 @@
           ],
           "type": "company_guess",
           "contact_name": "LE SOUVENIR FRANCAIS",
-          "source": "domain_pattern"
+          "source": "domain_pattern",
+          "director": null
         }
       }
     }

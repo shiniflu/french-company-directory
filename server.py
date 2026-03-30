@@ -243,7 +243,7 @@ def save_drafts(drafts):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(DRAFTS_FILE, "w", encoding="utf-8") as f:
         json.dump(drafts, f, indent=2, ensure_ascii=False)
-    github_sync_file("drafts.json")
+    github_sync_save("drafts.json", drafts)
 
 def hash_password(password, salt=None):
     """Hash password with SHA-256 + salt. Returns (hash, salt)."""

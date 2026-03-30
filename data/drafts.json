@@ -15,6 +15,22 @@
       ],
       "saved_by": "admin",
       "saved_at": "2026-03-30T13:59:39.653703+00:00"
+    },
+    "4f1a3fd05c2e3e7c": {
+      "draft_id": "4f1a3fd05c2e3e7c",
+      "cell_id": "b136f4fd0862345f",
+      "subject": "sdgdf",
+      "body": "dfgdf",
+      "images": [],
+      "recipients": [
+        {
+          "siren": "775676182",
+          "company_name": "LE SOUVENIR FRANCAIS",
+          "email": "contact@souvenir.fr"
+        }
+      ],
+      "saved_by": "admin",
+      "saved_at": "2026-03-30T14:01:45.713246+00:00"
     }
   },
   "deleted": {}

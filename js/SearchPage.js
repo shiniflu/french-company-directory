@@ -1,12 +1,12 @@
 import { createElement, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import htm from "htm";
 import { searchCompanies, logActivity, getFlaggedCompanies, flagCompany, unflagCompany,
-         getCells, createCell, addCompaniesToCell } from "./api.js?v=16";
+         getCells, createCell, addCompaniesToCell } from "./api.js?v=18";
 import { formatSiren, formatCurrency, getEmployeeLabel, getLatestFinance,
          CATEGORY_STYLES, EMPLOYEE_FILTER_OPTIONS,
          INDUSTRY_FILTER_OPTIONS, TURNOVER_FILTER_OPTIONS,
-         bulkExportToCSV, isInternationalTrade } from "./utils.js?v=12";
-import { LoadingSpinner, ErrorMessage, Badge, EmptyState } from "./components.js?v=11";
+         bulkExportToCSV, isInternationalTrade } from "./utils.js?v=18";
+import { LoadingSpinner, ErrorMessage, Badge, EmptyState } from "./components.js?v=18";
 
 const html = htm.bind(createElement);
 

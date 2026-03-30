@@ -1,6 +1,6 @@
 import { createElement, useState } from "react";
 import htm from "htm";
-import { login } from "./auth.js?v=17";
+import { login } from "./auth.js?v=18";
 
 const html = htm.bind(createElement);
 

@@ -1,7 +1,7 @@
 import { createElement, useState, useEffect, useCallback } from "react";
 import htm from "htm";
-import { authFetch } from "./auth.js?v=17";
-import { getUserStats } from "./api.js?v=16";
+import { authFetch } from "./auth.js?v=18";
+import { getUserStats } from "./api.js?v=18";
 
 const html = htm.bind(createElement);
 

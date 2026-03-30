@@ -50,11 +50,12 @@ ACTIVITY_LOG = os.path.join(DATA_DIR, "activity_log.jsonl")
 CFO_CONTACTS_FILE = os.path.join(DATA_DIR, "cfo_contacts.json")
 FLAGGED_COMPANIES_FILE = os.path.join(DATA_DIR, "flagged_companies.json")
 CELLS_FILE = os.path.join(DATA_DIR, "cells.json")
+DRAFTS_FILE = os.path.join(DATA_DIR, "drafts.json")
 
 # ── GitHub-backed persistent storage ─────────────────
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO = "shiniflu/french-company-directory"
-GITHUB_SYNC_FILES = ["cells.json", "flagged_companies.json", "cfo_contacts.json"]
+GITHUB_SYNC_FILES = ["cells.json", "flagged_companies.json", "cfo_contacts.json", "drafts.json"]
 
 def _github_get_file(filepath):
     """Get file content and SHA from GitHub repo."""
@@ -232,6 +233,18 @@ def save_cells(cells):
     """Save cells locally + sync to GitHub."""
     github_sync_save("cells.json", cells)
 
+def load_drafts():
+    if not os.path.exists(DRAFTS_FILE):
+        return {}
+    with open(DRAFTS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_drafts(drafts):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(DRAFTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(drafts, f, indent=2, ensure_ascii=False)
+    github_sync_file("drafts.json")
+
 def hash_password(password, salt=None):
     """Hash password with SHA-256 + salt. Returns (hash, salt)."""
     if salt is None:
@@ -380,6 +393,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_user_stats()
         elif self.path == "/api/admin/stats":
             self.handle_admin_stats()
+        elif self.path.startswith("/api/drafts"):
+            self.handle_get_drafts()
         else:
             super().do_GET()
 
@@ -406,6 +421,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_admin_create_user()
         elif self.path == "/api/activity":
             self.handle_log_activity()
+        elif self.path == "/api/drafts":
+            self.handle_save_draft()
         else:
             self.send_error(404)
 
@@ -1249,6 +1266,56 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                 save_cells(cells)
             log_activity(auth_user["username"], "delete_cell", cell_name)
             self.send_json(200, {"ok": True})
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
+
+    # ── Email Drafts endpoints ─────────────────────────
+
+    def handle_get_drafts(self):
+        """GET /api/drafts?cell_id=xxx -> get drafts for a cell"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        cell_id = params.get("cell_id", [""])[0]
+        drafts = load_drafts()
+        if cell_id:
+            cell_drafts = {k: v for k, v in drafts.items() if v.get("cell_id") == cell_id}
+            self.send_json(200, {"drafts": cell_drafts})
+        else:
+            self.send_json(200, {"drafts": drafts})
+
+    def handle_save_draft(self):
+        """POST /api/drafts { cell_id, siren, subject, body, to_email, images } -> save draft"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        try:
+            body = self.read_body()
+            cell_id = body.get("cell_id", "")
+            siren = body.get("siren", "")
+            if not siren:
+                self.send_json(400, {"error": "siren is required"})
+                return
+            draft_key = cell_id + "_" + siren if cell_id else siren
+            drafts = load_drafts()
+            drafts[draft_key] = {
+                "cell_id": cell_id,
+                "siren": siren,
+                "company_name": body.get("company_name", ""),
+                "to_email": body.get("to_email", ""),
+                "subject": body.get("subject", ""),
+                "body": body.get("body", ""),
+                "images": body.get("images", []),
+                "saved_by": auth_user["username"],
+                "saved_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+            save_drafts(drafts)
+            log_activity(auth_user["username"], "save_draft", siren)
+            self.send_json(200, {"ok": True, "draft": drafts[draft_key]})
         except Exception as e:
             self.send_json(500, {"error": str(e)})
 

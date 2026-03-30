@@ -278,6 +278,28 @@ export async function scrapeWebsiteForCfo(website, companyName, signal) {
   return data;
 }
 
+// ── Email Drafts ────────────────────────────────────
+
+export async function getDrafts(cellId, signal) {
+  const url = cellId ? "/api/drafts?cell_id=" + encodeURIComponent(cellId) : "/api/drafts";
+  const response = await fetch(url, { signal, headers: authHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to fetch drafts");
+  return data.drafts || {};
+}
+
+export async function saveDraft(draft, signal) {
+  const response = await fetch("/api/drafts", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(draft),
+    signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to save draft");
+  return data;
+}
+
 // ── Find Company Email ──────────────────────────────
 
 export async function findCompanyEmail(siren, companyName, signal) {

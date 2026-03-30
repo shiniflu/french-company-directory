@@ -1,8 +1,8 @@
 import { createElement, useState, useEffect } from "react";
 import htm from "htm";
-import { getFlaggedCompanies, unflagCompany } from "./api.js?v=11";
-import { formatSiren, CATEGORY_STYLES } from "./utils.js?v=11";
-import { LoadingSpinner, ErrorMessage, Badge, EmptyState } from "./components.js?v=11";
+import { getFlaggedCompanies, unflagCompany } from "./api.js?v=18";
+import { formatSiren, CATEGORY_STYLES } from "./utils.js?v=18";
+import { LoadingSpinner, ErrorMessage, Badge, EmptyState } from "./components.js?v=18";
 
 const html = htm.bind(createElement);
 

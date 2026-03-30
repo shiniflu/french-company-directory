@@ -1,8 +1,8 @@
 import { createElement, useState, useEffect } from "react";
 import htm from "htm";
-import { getCells, getCellDetail, deleteCell, removeCompanyFromCell, findCompanyEmail } from "./api.js?v=16";
-import { formatSiren, CATEGORY_STYLES } from "./utils.js?v=12";
-import { LoadingSpinner, ErrorMessage, Badge, EmptyState } from "./components.js?v=16";
+import { getCells, getCellDetail, deleteCell, removeCompanyFromCell, findCompanyEmail, getDrafts, saveDraft } from "./api.js?v=18";
+import { formatSiren, CATEGORY_STYLES } from "./utils.js?v=18";
+import { LoadingSpinner, ErrorMessage, Badge, EmptyState } from "./components.js?v=18";
 
 const html = htm.bind(createElement);
 
@@ -68,6 +68,18 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
   const [searching, setSearching] = useState(false);
   const [searchProgress, setSearchProgress] = useState("");
   const [expandedEmail, setExpandedEmail] = useState({});
+  const [showComposer, setShowComposer] = useState(false);
+  const [drafts, setDrafts] = useState({});
+  const [composerSubject, setComposerSubject] = useState("");
+  const [composerBody, setComposerBody] = useState("");
+  const [composerImages, setComposerImages] = useState([]);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSaved, setDraftSaved] = useState({});
+
+  // Load existing drafts on mount
+  useEffect(() => {
+    getDrafts(cellId).then(d => setDrafts(d)).catch(() => {});
+  }, [cellId]);
 
   const selectedCount = Object.values(selected).filter(Boolean).length;
   const allSelected = companies.length > 0 && selectedCount === companies.length;
@@ -87,6 +99,53 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
 
   const toggleEmailDetail = (siren) => {
     setExpandedEmail(prev => ({ ...prev, [siren]: !prev[siren] }));
+  };
+
+  // Handle image upload to base64
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setComposerImages(prev => prev.concat({ name: file.name, data: ev.target.result }));
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
+  };
+
+  const removeImage = (idx) => {
+    setComposerImages(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  // Save draft for each selected company
+  const handleSaveAllDrafts = async () => {
+    const selectedCompanies = companies.filter(([s]) => selected[s]);
+    if (selectedCompanies.length === 0) return;
+    setSavingDraft(true);
+    const newSaved = {};
+    for (const [siren, comp] of selectedCompanies) {
+      const emailInfo = emailResults[siren];
+      const toEmail = emailInfo && emailInfo.email ? emailInfo.email : "";
+      try {
+        await saveDraft({
+          cell_id: cellId,
+          siren: siren,
+          company_name: comp.company_name || "",
+          to_email: toEmail,
+          subject: composerSubject,
+          body: composerBody,
+          images: composerImages.map(img => img.name),
+        });
+        newSaved[siren] = true;
+      } catch (err) {
+        newSaved[siren] = false;
+      }
+    }
+    setDraftSaved(newSaved);
+    setSavingDraft(false);
+    getDrafts(cellId).then(d => setDrafts(d)).catch(() => {});
+    setTimeout(() => setDraftSaved({}), 3000);
   };
 
   // Find ALL emails for all companies in cell
@@ -154,6 +213,71 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors disabled:opacity-50">
             ${searching ? "🔄 " + searchProgress : "📧 Find Email"}
           </button>
+          <button onClick=${() => setShowComposer(!showComposer)}
+            disabled=${selectedCount === 0}
+            className=${"inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 " + (showComposer ? "bg-purple-700 text-white" : "bg-purple-600 text-white hover:bg-purple-700")}>
+            ${"✉️"} Compose Email
+          </button>
+        </div>
+      `}
+
+      ${showComposer && selectedCount > 0 && html`
+        <div className="mb-4 bg-white rounded-lg shadow-md border border-purple-200 overflow-hidden">
+          <div className="bg-purple-50 px-4 py-3 border-b border-purple-200 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-purple-800">${"✉️"} Compose Email for ${selectedCount} compan${selectedCount === 1 ? "y" : "ies"}</h3>
+            <button onClick=${() => setShowComposer(false)} className="text-gray-400 hover:text-gray-600 text-lg font-bold">${"×"}</button>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="text-xs text-gray-500 mb-2">
+              To: ${companies.filter(([s]) => selected[s]).map(([s, c]) => {
+                const ei = emailResults[s];
+                const email = ei && ei.email ? ei.email : "no email";
+                return (c.company_name || s) + " <" + email + ">";
+              }).join(", ")}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Subject</label>
+              <input type="text" value=${composerSubject}
+                onInput=${(e) => setComposerSubject(e.target.value)}
+                placeholder="Email subject..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Message</label>
+              <textarea value=${composerBody}
+                onInput=${(e) => setComposerBody(e.target.value)}
+                placeholder="Write your email message here..."
+                rows="8"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none resize-y" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Attach Images</label>
+              <input type="file" accept="image/*" multiple onChange=${handleImageUpload}
+                className="text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100" />
+              ${composerImages.length > 0 && html`
+                <div className="flex flex-wrap gap-2 mt-2">
+                  ${composerImages.map((img, idx) => html`
+                    <div key=${idx} className="relative group">
+                      <img src=${img.data} alt=${img.name} className="h-16 w-16 object-cover rounded border border-gray-200" />
+                      <button onClick=${() => removeImage(idx)}
+                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center hover:bg-red-600">${"×"}</button>
+                      <span className="block text-[9px] text-gray-400 truncate w-16 mt-0.5">${img.name}</span>
+                    </div>
+                  `)}
+                </div>
+              `}
+            </div>
+            <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+              <button onClick=${handleSaveAllDrafts}
+                disabled=${savingDraft || !composerSubject.trim()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50">
+                ${savingDraft ? "Saving..." : "💾 Save Draft for All Selected"}
+              </button>
+              ${Object.keys(draftSaved).length > 0 && html`
+                <span className="text-sm text-green-600 font-medium">${"✓"} Drafts saved!</span>
+              `}
+            </div>
+          </div>
         </div>
       `}
 
@@ -187,6 +311,7 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
               ${companies.map(([siren, comp], i) => {
                 const catStyle = CATEGORY_STYLES[comp.categorie_entreprise];
                 const emailInfo = emailResults[siren];
+                const hasDraft = drafts[cellId + "_" + siren];
                 return html`
                   <tr key=${siren}
                     className=${"border-b border-gray-100 hover:bg-blue-50 transition-colors " + (i % 2 === 0 ? "bg-white" : "bg-gray-50")}>
@@ -214,6 +339,11 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                         ${emailInfo && emailInfo.error && html`
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-50 text-red-600 border border-red-200">
                             ${"⚠"} Not found
+                          </span>
+                        `}
+                        ${hasDraft && html`
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-purple-100 text-purple-800 border border-purple-300">
+                            ${"📝"} Draft
                           </span>
                         `}
                       </div>

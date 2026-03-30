@@ -1,14 +1,14 @@
 import { createElement, useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import htm from "htm";
-import { Header, Footer } from "./components.js?v=16";
-import { SearchPage } from "./SearchPage.js?v=16";
-import { CompanyPage } from "./CompanyPage.js?v=16";
-import { LoginPage } from "./LoginPage.js?v=16";
-import { AdminPage } from "./AdminPage.js?v=16";
-import { FlaggedPage } from "./FlaggedPage.js?v=16";
-import { CellsPage } from "./CellsPage.js?v=16";
-import { getUser, logout, validateSession } from "./auth.js?v=17";
+import { Header, Footer } from "./components.js?v=18";
+import { SearchPage } from "./SearchPage.js?v=18";
+import { CompanyPage } from "./CompanyPage.js?v=18";
+import { LoginPage } from "./LoginPage.js?v=18";
+import { AdminPage } from "./AdminPage.js?v=18";
+import { FlaggedPage } from "./FlaggedPage.js?v=18";
+import { CellsPage } from "./CellsPage.js?v=18";
+import { getUser, logout, validateSession } from "./auth.js?v=18";
 
 const html = htm.bind(createElement);
 

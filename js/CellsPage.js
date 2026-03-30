@@ -146,11 +146,11 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
         `}
       </div>
 
-      ${selectedCount > 0 && html`
-        <div className="mb-4 flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-          <span className="text-sm font-medium text-blue-800">${selectedCount} selected</span>
+      ${html`
+        <div className=${"mb-4 flex flex-wrap items-center gap-3 rounded-lg px-4 py-3 transition-all " + (selectedCount > 0 ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-gray-200 opacity-50")}>
+          <span className=${"text-sm font-medium " + (selectedCount > 0 ? "text-blue-800" : "text-gray-400")}>${selectedCount > 0 ? selectedCount + " selected" : "Select companies"}</span>
           <button onClick=${handleFindEmails}
-            disabled=${searching}
+            disabled=${searching || selectedCount === 0}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition-colors disabled:opacity-50">
             ${searching ? "🔄 " + searchProgress : "📧 Find Email"}
           </button>
@@ -208,7 +208,7 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                              emailInfo.type === "director" ? "bg-blue-100 text-blue-800 border border-blue-300" :
                              emailInfo.type === "company_guess" ? "bg-amber-100 text-amber-800 border border-amber-300" :
                              "bg-gray-100 text-gray-700 border border-gray-300")}>
-                            ${"📧"} ${emailInfo.type === "cfo" ? "CFO" : emailInfo.type === "director" ? "Director" : emailInfo.type === "company_guess" ? "Guess" : "Company"}
+                            ${"📧"} ${emailInfo.type === "cfo" ? "CFO" : emailInfo.type === "director" ? "Director" : "EMAILS"}
                           </span>
                         `}
                         ${emailInfo && emailInfo.error && html`
@@ -266,30 +266,6 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                         </div>
                       `}
 
-                      ${emailInfo && emailInfo.email && html`
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                          <a href=${"mailto:" + emailInfo.email}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 font-mono">
-                            ${"🌐"} ${emailInfo.email}
-                          </a>
-                          ${emailInfo.contact_name && emailInfo.type !== "company_guess" && html`
-                            <span className="text-gray-400">${emailInfo.contact_name}</span>
-                          `}
-                          ${emailInfo.source && html`
-                            <span className="text-gray-300 text-[10px]">(${emailInfo.source})</span>
-                          `}
-                        </div>
-                      `}
-                      ${emailInfo && emailInfo.all_emails && emailInfo.all_emails.length > 1 && html`
-                        <div className="mt-1 flex flex-wrap gap-1 text-xs">
-                          ${emailInfo.all_emails.slice(1).map(e => html`
-                            <a key=${e} href=${"mailto:" + e}
-                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100 font-mono text-[10px]">
-                              ${e}
-                            </a>
-                          `)}
-                        </div>
-                      `}
                     </td>
                     <td className="py-3 px-3 text-gray-600 font-mono text-xs">${formatSiren(siren)}</td>
                     <td className="py-3 px-3 hidden sm:table-cell text-gray-500 text-xs">

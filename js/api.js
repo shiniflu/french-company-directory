@@ -280,11 +280,17 @@ export async function scrapeWebsiteForCfo(website, companyName, signal) {
 
 // ── Email Drafts ────────────────────────────────────
 
-export async function getDrafts(cellId, signal) {
+export async function getDraftsData(cellId, signal) {
   const url = cellId ? "/api/drafts?cell_id=" + encodeURIComponent(cellId) : "/api/drafts";
   const response = await fetch(url, { signal, headers: authHeaders() });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Failed to fetch drafts");
+  return data; // { drafts: {}, deleted: {} }
+}
+
+// Keep old function name for backwards compatibility
+export async function getDrafts(cellId, signal) {
+  const data = await getDraftsData(cellId, signal);
   return data.drafts || {};
 }
 
@@ -292,11 +298,47 @@ export async function saveDraft(draft, signal) {
   const response = await fetch("/api/drafts", {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(draft),
+    body: JSON.stringify({ action: "save", ...draft }),
     signal,
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Failed to save draft");
+  return data;
+}
+
+export async function deleteDraft(draftId, signal) {
+  const response = await fetch("/api/drafts", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ action: "delete", draft_id: draftId }),
+    signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to delete draft");
+  return data;
+}
+
+export async function restoreDraft(draftId, signal) {
+  const response = await fetch("/api/drafts", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ action: "restore", draft_id: draftId }),
+    signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to restore draft");
+  return data;
+}
+
+export async function permanentDeleteDraft(draftId, signal) {
+  const response = await fetch("/api/drafts", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ action: "permanent_delete", draft_id: draftId }),
+    signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to permanently delete draft");
   return data;
 }
 

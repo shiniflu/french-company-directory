@@ -1272,7 +1272,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
     # ── Email Drafts endpoints ─────────────────────────
 
     def handle_get_drafts(self):
-        """GET /api/drafts?cell_id=xxx -> get drafts for a cell"""
+        """GET /api/drafts?cell_id=xxx -> get drafts + recently deleted"""
         auth_user = get_auth_user(self)
         if not auth_user:
             self.send_json(401, {"error": "Not authenticated"})
@@ -1280,42 +1280,91 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
         cell_id = params.get("cell_id", [""])[0]
-        drafts = load_drafts()
+        data = load_drafts()
+        drafts = data.get("drafts", {})
+        deleted = data.get("deleted", {})
+        # Auto-clean deleted older than 7 days
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cleaned = {}
+        for k, v in deleted.items():
+            deleted_at = v.get("deleted_at", "")
+            try:
+                dt = datetime.datetime.fromisoformat(deleted_at.replace("Z", "+00:00"))
+                if (now - dt).days < 7:
+                    cleaned[k] = v
+            except Exception:
+                pass
+        if len(cleaned) != len(deleted):
+            data["deleted"] = cleaned
+            save_drafts(data)
+            deleted = cleaned
         if cell_id:
-            cell_drafts = {k: v for k, v in drafts.items() if v.get("cell_id") == cell_id}
-            self.send_json(200, {"drafts": cell_drafts})
-        else:
-            self.send_json(200, {"drafts": drafts})
+            drafts = {k: v for k, v in drafts.items() if v.get("cell_id") == cell_id}
+            deleted = {k: v for k, v in deleted.items() if v.get("cell_id") == cell_id}
+        self.send_json(200, {"drafts": drafts, "deleted": deleted})
 
     def handle_save_draft(self):
-        """POST /api/drafts { cell_id, siren, subject, body, to_email, images } -> save draft"""
+        """POST /api/drafts { action, ... } -> save/delete/restore draft"""
         auth_user = get_auth_user(self)
         if not auth_user:
             self.send_json(401, {"error": "Not authenticated"})
             return
         try:
             body = self.read_body()
-            cell_id = body.get("cell_id", "")
-            siren = body.get("siren", "")
-            if not siren:
-                self.send_json(400, {"error": "siren is required"})
-                return
-            draft_key = cell_id + "_" + siren if cell_id else siren
-            drafts = load_drafts()
-            drafts[draft_key] = {
-                "cell_id": cell_id,
-                "siren": siren,
-                "company_name": body.get("company_name", ""),
-                "to_email": body.get("to_email", ""),
-                "subject": body.get("subject", ""),
-                "body": body.get("body", ""),
-                "images": body.get("images", []),
-                "saved_by": auth_user["username"],
-                "saved_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            }
-            save_drafts(drafts)
-            log_activity(auth_user["username"], "save_draft", siren)
-            self.send_json(200, {"ok": True, "draft": drafts[draft_key]})
+            action = body.get("action", "save")
+            data = load_drafts()
+            if "drafts" not in data:
+                data["drafts"] = {}
+            if "deleted" not in data:
+                data["deleted"] = {}
+
+            if action == "save":
+                draft_id = body.get("draft_id") or secrets.token_hex(8)
+                data["drafts"][draft_id] = {
+                    "draft_id": draft_id,
+                    "cell_id": body.get("cell_id", ""),
+                    "subject": body.get("subject", ""),
+                    "body": body.get("body", ""),
+                    "images": body.get("images", []),
+                    "recipients": body.get("recipients", []),
+                    "saved_by": auth_user["username"],
+                    "saved_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                }
+                save_drafts(data)
+                log_activity(auth_user["username"], "save_draft", body.get("subject", ""))
+                self.send_json(200, {"ok": True, "draft_id": draft_id, "draft": data["drafts"][draft_id]})
+
+            elif action == "delete":
+                draft_id = body.get("draft_id", "")
+                if draft_id in data["drafts"]:
+                    draft = data["drafts"].pop(draft_id)
+                    draft["deleted_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    draft["deleted_by"] = auth_user["username"]
+                    data["deleted"][draft_id] = draft
+                    save_drafts(data)
+                    log_activity(auth_user["username"], "delete_draft", draft.get("subject", ""))
+                self.send_json(200, {"ok": True})
+
+            elif action == "restore":
+                draft_id = body.get("draft_id", "")
+                if draft_id in data["deleted"]:
+                    draft = data["deleted"].pop(draft_id)
+                    del draft["deleted_at"]
+                    del draft["deleted_by"]
+                    data["drafts"][draft_id] = draft
+                    save_drafts(data)
+                self.send_json(200, {"ok": True})
+
+            elif action == "permanent_delete":
+                draft_id = body.get("draft_id", "")
+                if draft_id in data["deleted"]:
+                    del data["deleted"][draft_id]
+                    save_drafts(data)
+                self.send_json(200, {"ok": True})
+
+            else:
+                self.send_json(400, {"error": "Unknown action"})
+
         except Exception as e:
             self.send_json(500, {"error": str(e)})
 

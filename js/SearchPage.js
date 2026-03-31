@@ -399,7 +399,11 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser, country = 
         setTotalResults(data.total_results || 0);
         setLoadingProgress("");
         setLoading(false);
-        if (data.note) setError(data.note);
+        const noteMsg = data.note || "";
+        const searchUrl = data.search_url || "";
+        if (noteMsg || (data.results || []).length === 0) {
+          setError(noteMsg + (searchUrl ? "\n\nSearch directly: " + searchUrl : ""));
+        }
         logActivity("search", country + ": " + query.trim());
         return;
       }

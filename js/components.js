@@ -127,13 +127,21 @@ export function LoadingSpinner({ message = "Loading..." }) {
 
 // ── Error Message ───────────────────────────────────
 export function ErrorMessage({ message, onRetry }) {
+  // Split message by URLs and render them as clickable links
+  const parts = (message || "").split(/(https?:\/\/[^\s]+)/g);
   return html`
-    <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center max-w-lg mx-auto">
-      <p className="text-red-600 font-medium mb-1">Error</p>
-      <p className="text-red-500 text-sm mb-3">${message}</p>
+    <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 text-center max-w-lg mx-auto">
+      <p className="text-amber-700 font-medium mb-1">${"ℹ️"} Info</p>
+      <p className="text-amber-600 text-sm mb-3 whitespace-pre-line">
+        ${parts.map((part, i) =>
+          part.match(/^https?:\/\//) ?
+            html`<a key=${i} href=${part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium break-all">${part}</a>` :
+            part
+        )}
+      </p>
       ${onRetry && html`
         <button onClick=${onRetry}
-                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 transition-colors">
+                className="px-4 py-2 bg-amber-600 text-white rounded-md text-sm hover:bg-amber-700 transition-colors">
           Retry
         </button>
       `}

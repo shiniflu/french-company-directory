@@ -1407,60 +1407,121 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             if country == "pl":
-                # Poland KRS API
-                url = f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{urllib.parse.quote(q)}"
+                # Poland KRS API - works with exact KRS number (10 digits)
+                krs_num = q.strip().replace(" ", "")
+                # Pad to 10 digits if it looks like a number
+                if krs_num.isdigit():
+                    krs_num = krs_num.zfill(10)
+                url = f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs_num}"
                 req = urllib.request.Request(url, headers={"Accept": "application/json"})
                 try:
                     with urllib.request.urlopen(req, timeout=15) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
                         results = []
-                        if isinstance(data, dict) and data.get("odppisDanychAktualnychFull"):
-                            d = data["odppisDanychAktualnychFull"]
-                            dane = d.get("dane", d.get("naglowekA", {}))
-                            results.append({
-                                "nom_complet": dane.get("nazwa", q),
-                                "siren": dane.get("krs", q),
-                                "siege": {"libelle_commune": dane.get("miejscowosc", ""), "code_postal": dane.get("kodPocztowy", "")},
-                                "categorie_entreprise": "",
-                                "dirigeants": [],
-                            })
-                        self.send_json(200, {"results": results, "total_results": len(results), "page": 1, "total_pages": 1})
-                except urllib.error.HTTPError:
-                    # Try search by name
-                    url2 = f"https://api-krs.ms.gov.pl/api/krs/OdpisPelny/{urllib.parse.quote(q)}"
-                    self.send_json(200, {"results": [], "total_results": 0, "page": 1, "total_pages": 0, "note": "Poland KRS requires exact KRS number. Try searching by KRS number (e.g. 0000019193)."})
+                        odpis = data.get("odpis", {})
+                        dane = odpis.get("dane", {})
+                        dzial1 = dane.get("dzial1", {})
+                        podmiot = dzial1.get("danePodmiotu", {})
+                        siedziba = dzial1.get("siedzibaIAdres", {})
+                        adres = siedziba.get("adres", {})
+                        naglowek = odpis.get("naglowekA", odpis.get("naglowekP", {}))
+
+                        # Extract directors from dzial2
+                        dirigeants = []
+                        dzial2 = dane.get("dzial2", {})
+                        for key in ["organReprezentacji", "wspolnicy", "prokurenci"]:
+                            organ = dzial2.get(key, {})
+                            if isinstance(organ, dict):
+                                sklad = organ.get("sklad", [])
+                                for person in sklad:
+                                    if isinstance(person, dict):
+                                        fn = person.get("imiona", "")
+                                        ln = person.get("nazwisko", "")
+                                        func = person.get("funkcjaWOrganie", "")
+                                        if fn and ln:
+                                            dirigeants.append({
+                                                "type_dirigeant": "personne physique",
+                                                "prenoms": fn, "nom": ln,
+                                                "qualite": func,
+                                            })
+
+                        nazwa = podmiot.get("nazwa", naglowek.get("nazwa", q))
+                        results.append({
+                            "nom_complet": nazwa,
+                            "siren": naglowek.get("numerKRS", krs_num),
+                            "siege": {
+                                "libelle_commune": adres.get("miejscowosc", ""),
+                                "code_postal": adres.get("kodPocztowy", ""),
+                            },
+                            "categorie_entreprise": podmiot.get("formaPrawna", ""),
+                            "dirigeants": dirigeants,
+                            "identifiers": {
+                                "krs": naglowek.get("numerKRS", ""),
+                                "regon": podmiot.get("identyfikatory", {}).get("regon", ""),
+                                "nip": podmiot.get("identyfikatory", {}).get("nip", ""),
+                            },
+                        })
+                        self.send_json(200, {"results": results, "total_results": 1, "page": 1, "total_pages": 1})
+                except urllib.error.HTTPError as e:
+                    self.send_json(200, {
+                        "results": [], "total_results": 0, "page": 1, "total_pages": 0,
+                        "note": "Poland KRS: Enter a KRS number (e.g. 0000019193). Name search is not supported by this API. You can find KRS numbers at https://prs.ms.gov.pl/",
+                        "search_url": f"https://prs.ms.gov.pl/krs/wyszukiwanie?t:nazwaPodmiotu={urllib.parse.quote(q)}",
+                    })
 
             elif country == "us":
-                # OpenCorporates API (USA)
-                url = f"https://api.opencorporates.com/v0.4/companies/search?q={urllib.parse.quote(q)}&jurisdiction_code=us&page={page}&per_page={per_page}"
-                req = urllib.request.Request(url, headers={"Accept": "application/json"})
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    companies = data.get("results", {}).get("companies", [])
-                    results = []
-                    for c in companies:
-                        co = c.get("company", {})
-                        results.append({
-                            "nom_complet": co.get("name", ""),
-                            "siren": co.get("company_number", ""),
-                            "siege": {"libelle_commune": co.get("registered_address", {}).get("locality", ""), "code_postal": co.get("registered_address", {}).get("postal_code", "")},
-                            "categorie_entreprise": co.get("company_type", ""),
-                            "dirigeants": [],
-                            "etat_administratif": "A" if co.get("current_status") == "Active" else "C",
-                        })
-                    total = data.get("results", {}).get("total_count", 0)
-                    self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": (total // per_page) + 1})
+                # OpenCorporates API (free tier)
+                url = f"https://api.opencorporates.com/v0.4/companies/search?q={urllib.parse.quote(q)}&jurisdiction_code=us&page={page}&per_page={per_page}&order=score"
+                req = urllib.request.Request(url, headers={
+                    "Accept": "application/json",
+                    "User-Agent": "CompanyDirectory/1.0",
+                })
+                try:
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        companies = data.get("results", {}).get("companies", [])
+                        results = []
+                        for c in companies:
+                            co = c.get("company", {})
+                            addr = co.get("registered_address", {}) or {}
+                            results.append({
+                                "nom_complet": co.get("name", ""),
+                                "siren": co.get("company_number", ""),
+                                "siege": {"libelle_commune": addr.get("locality", co.get("registered_address_in_full", "")[:30] if co.get("registered_address_in_full") else ""), "code_postal": addr.get("postal_code", "")},
+                                "categorie_entreprise": co.get("company_type", ""),
+                                "dirigeants": [],
+                                "etat_administratif": "A" if co.get("current_status", "").lower() in ["active", "good standing"] else "C",
+                            })
+                        total = data.get("results", {}).get("total_count", len(results))
+                        self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": max(1, (total // per_page) + 1)})
+                except Exception as e:
+                    self.send_json(200, {
+                        "results": [], "total_results": 0, "page": 1, "total_pages": 0,
+                        "note": f"USA OpenCorporates: {str(e)}. Try searching directly at https://opencorporates.com/companies/us?q={urllib.parse.quote(q)}",
+                        "search_url": f"https://opencorporates.com/companies/us?q={urllib.parse.quote(q)}",
+                    })
 
             elif country == "gb":
-                # UK Companies House API
+                # UK Companies House - requires API key
+                # Free API key from https://developer.company-information.service.gov.uk/
+                uk_api_key = os.environ.get("UK_COMPANIES_HOUSE_KEY", "")
+                if not uk_api_key:
+                    self.send_json(200, {
+                        "results": [], "total_results": 0, "page": 1, "total_pages": 0,
+                        "note": "UK Companies House requires an API key. Get a free key at https://developer.company-information.service.gov.uk/ and set UK_COMPANIES_HOUSE_KEY environment variable.",
+                        "search_url": f"https://find-and-update.company-information.service.gov.uk/search?q={urllib.parse.quote(q)}",
+                    })
+                    return
                 url = f"https://api.company-information.service.gov.uk/search/companies?q={urllib.parse.quote(q)}&items_per_page={per_page}&start_index={(page-1)*per_page}"
-                req = urllib.request.Request(url, headers={"Accept": "application/json"})
+                import base64
+                auth = base64.b64encode(f"{uk_api_key}:".encode()).decode()
+                req = urllib.request.Request(url, headers={"Accept": "application/json", "Authorization": f"Basic {auth}"})
                 with urllib.request.urlopen(req, timeout=15) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     items = data.get("items", [])
                     results = []
                     for co in items:
-                        addr = co.get("address", {})
+                        addr = co.get("address", {}) or {}
                         results.append({
                             "nom_complet": co.get("title", ""),
                             "siren": co.get("company_number", ""),
@@ -1470,33 +1531,23 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                             "etat_administratif": "A" if co.get("company_status") == "active" else "C",
                         })
                     total = data.get("total_results", 0)
-                    self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": (total // per_page) + 1})
+                    self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": max(1, (total // per_page) + 1)})
 
             elif country == "ua":
-                # Ukraine open data
-                self.send_json(200, {"results": [], "total_results": 0, "page": 1, "total_pages": 0, "note": "Ukraine company search requires EDRPOU code. Direct search by name is not available via this API."})
+                # Ukraine - redirect to web search
+                self.send_json(200, {
+                    "results": [], "total_results": 0, "page": 1, "total_pages": 0,
+                    "note": "Ukraine: Search companies at the official registry. Enter EDRPOU code for direct lookup.",
+                    "search_url": f"https://usr.minjust.gov.ua/content/free-search?search={urllib.parse.quote(q)}",
+                })
 
             elif country == "lt":
-                # Lithuania open data
-                url = f"https://data.gov.lt/api/v1/datasets/642/get-data?search={urllib.parse.quote(q)}&limit={per_page}&offset={(page-1)*per_page}"
-                req = urllib.request.Request(url, headers={"Accept": "application/json"})
-                try:
-                    with urllib.request.urlopen(req, timeout=15) as resp:
-                        data = json.loads(resp.read().decode("utf-8"))
-                        items = data.get("data", [])
-                        results = []
-                        for co in items:
-                            results.append({
-                                "nom_complet": co.get("name", co.get("pavadinimas", "")),
-                                "siren": co.get("code", co.get("kodas", "")),
-                                "siege": {"libelle_commune": co.get("city", co.get("miestas", "")), "code_postal": ""},
-                                "categorie_entreprise": "",
-                                "dirigeants": [],
-                            })
-                        total = data.get("total", len(items))
-                        self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": max(1, total // per_page)})
-                except Exception:
-                    self.send_json(200, {"results": [], "total_results": 0, "page": 1, "total_pages": 0, "note": "Lithuania API returned no results."})
+                # Lithuania - Registru Centras
+                self.send_json(200, {
+                    "results": [], "total_results": 0, "page": 1, "total_pages": 0,
+                    "note": "Lithuania: Search companies at the official registry below.",
+                    "search_url": f"https://www.registrucentras.lt/jar/p/index.php?q={urllib.parse.quote(q)}",
+                })
 
             else:
                 self.send_json(400, {"error": f"Unknown country: {country}"})

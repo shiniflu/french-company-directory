@@ -1,7 +1,7 @@
 import { createElement, useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import htm from "htm";
-import { Header, Footer } from "./components.js?v=18";
+import { Header, Footer, CountrySelector } from "./components.js?v=18";
 import { SearchPage } from "./SearchPage.js?v=18";
 import { CompanyPage } from "./CompanyPage.js?v=18";
 import { LoginPage } from "./LoginPage.js?v=18";
@@ -64,6 +64,7 @@ function App() {
   const { route, navigate } = useHashRouter();
   const [currentUser, setCurrentUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [country, setCountry] = useState("fr");
   const searchStateRef = useRef({
     query: "",
     filters: {},
@@ -178,10 +179,11 @@ function App() {
   return html`
     <div className="min-h-screen flex flex-col bg-gray-50">
       <${Header} currentUser=${currentUser} onLogout=${handleLogout} onNavigate=${navigate} />
+      <${CountrySelector} selectedCountry=${country} onSelectCountry=${setCountry} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
         ${route.page === "company"
-          ? html`<${CompanyPage} key=${route.siren} siren=${route.siren} onNavigate=${navigate} currentUser=${currentUser} />`
-          : html`<${SearchPage} onNavigate=${navigate} searchStateRef=${searchStateRef} currentUser=${currentUser} />`
+          ? html`<${CompanyPage} key=${route.siren} siren=${route.siren} onNavigate=${navigate} currentUser=${currentUser} country=${country} />`
+          : html`<${SearchPage} onNavigate=${navigate} searchStateRef=${searchStateRef} currentUser=${currentUser} country=${country} />`
         }
       </main>
       <${Footer} />

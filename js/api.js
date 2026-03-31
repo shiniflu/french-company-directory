@@ -33,7 +33,20 @@ async function apiFetch(endpoint, params = {}, signal) {
 }
 
 /**
- * Search companies
+ * Search companies in a specific country
+ */
+export async function searchCompaniesByCountry(country, query, page = 1, perPage = 25, signal) {
+  const response = await fetch(
+    "/api/search/" + country + "?q=" + encodeURIComponent(query) + "&page=" + page + "&per_page=" + perPage,
+    { signal, headers: authHeaders() }
+  );
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Search failed");
+  return data;
+}
+
+/**
+ * Search companies (France)
  * @param {Object} params - Search parameters
  * @param {AbortSignal} [signal] - AbortController signal
  */

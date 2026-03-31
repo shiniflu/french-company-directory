@@ -1,12 +1,12 @@
 import { createElement, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import htm from "htm";
-import { searchCompanies, logActivity, getFlaggedCompanies, flagCompany, unflagCompany,
+import { searchCompanies, searchCompaniesByCountry, logActivity, getFlaggedCompanies, flagCompany, unflagCompany,
          getCells, createCell, addCompaniesToCell } from "./api.js?v=18";
 import { formatSiren, formatCurrency, getEmployeeLabel, getLatestFinance,
          CATEGORY_STYLES, EMPLOYEE_FILTER_OPTIONS,
          INDUSTRY_FILTER_OPTIONS, TURNOVER_FILTER_OPTIONS,
          bulkExportToCSV, isInternationalTrade } from "./utils.js?v=18";
-import { LoadingSpinner, ErrorMessage, Badge, EmptyState } from "./components.js?v=18";
+import { LoadingSpinner, ErrorMessage, Badge, EmptyState, COUNTRIES } from "./components.js?v=18";
 
 const html = htm.bind(createElement);
 
@@ -337,7 +337,7 @@ function sortResultsList(results, sortKey) {
 }
 
 // ── Search Page (main export) ───────────────────────
-export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
+export function SearchPage({ onNavigate, searchStateRef, currentUser, country = "fr" }) {
   const username = currentUser ? currentUser.username : "";
   const saved = searchStateRef ? searchStateRef.current : {};
   const [query, setQuery] = useState(saved.query || "");
@@ -391,6 +391,19 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
     setLoadingProgress("Searching...");
 
     try {
+      // Non-French countries: use proxy search
+      if (country !== "fr") {
+        if (!query.trim()) { setLoading(false); return; }
+        const data = await searchCompaniesByCountry(country, query.trim(), 1, 25, controller.signal);
+        setAllResults(data.results || []);
+        setTotalResults(data.total_results || 0);
+        setLoadingProgress("");
+        setLoading(false);
+        if (data.note) setError(data.note);
+        logActivity("search", country + ": " + query.trim());
+        return;
+      }
+
       // Strip internal keys (prefixed with _) before sending to API
       const cleanFilters = {};
       Object.entries(filters).forEach(([k, v]) => {
@@ -595,7 +608,9 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser }) {
     <div>
       ${!allResults && !loading && !error && html`
         <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Search French companies</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            ${(COUNTRIES.find(c => c.code === country) || {}).flag || ""} Search ${(COUNTRIES.find(c => c.code === country) || {}).name || "companies"}
+          </h2>
           <p className="text-gray-500">Explore public data: identity, directors, financials and more</p>
         </div>
       `}

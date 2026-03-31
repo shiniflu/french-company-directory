@@ -85,6 +85,36 @@ export function Footer() {
   `;
 }
 
+// ── Country Selector ─────────────────────────────────
+export const COUNTRIES = [
+  { code: "fr", flag: "\uD83C\uDDEB\uD83C\uDDF7", name: "France", active: true },
+  { code: "pl", flag: "\uD83C\uDDF5\uD83C\uDDF1", name: "Poland", active: true },
+  { code: "us", flag: "\uD83C\uDDFA\uD83C\uDDF8", name: "USA", active: true },
+  { code: "ua", flag: "\uD83C\uDDFA\uD83C\uDDE6", name: "Ukraine", active: true },
+  { code: "lt", flag: "\uD83C\uDDF1\uD83C\uDDF9", name: "Lithuania", active: true },
+  { code: "gb", flag: "\uD83C\uDDEC\uD83C\uDDE7", name: "UK", active: true },
+];
+
+export function CountrySelector({ selectedCountry, onSelectCountry }) {
+  return html`
+    <div className="flex items-center justify-center gap-1 py-2 bg-gray-100 border-b border-gray-200">
+      ${COUNTRIES.filter(c => c.active).map(c => html`
+        <button key=${c.code}
+          onClick=${() => onSelectCountry(c.code)}
+          className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all " +
+            (selectedCountry === c.code
+              ? "bg-gov-blue text-white shadow-md"
+              : "bg-white text-gray-700 hover:bg-gray-200 border border-gray-300"
+            )}
+          title=${c.name}>
+          <span className="text-base">${c.flag}</span>
+          <span className="hidden sm:inline">${c.name}</span>
+        </button>
+      `)}
+    </div>
+  `;
+}
+
 // ── Loading Spinner ─────────────────────────────────
 export function LoadingSpinner({ message = "Loading..." }) {
   return html`

@@ -293,7 +293,7 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
             ${"📤"} Send Email
           </button>
           <button onClick=${() => { setShowDeleted(!showDeleted); setShowDraftList(false); }}
-            className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors border " + (showDeleted ? "bg-red-50 text-red-700 border-red-300" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50")}>
+            className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors border ml-auto " + (showDeleted ? "bg-red-50 text-red-700 border-red-300" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50")}>
             ${"🗑️"} Deleted ${Object.keys(deletedDrafts).length > 0 ? "(" + Object.keys(deletedDrafts).length + ")" : ""}
           </button>
         </div>
@@ -438,6 +438,11 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50">
                 ${savingDraft ? "Saving..." : editingDraftId ? "💾 Update Draft" : "💾 Save Draft"}
               </button>
+              <button onClick=${() => { handleSaveDraft(); setShowComposer(false); }}
+                disabled=${savingDraft || !composerSubject.trim()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50">
+                ${"✓"} Select for Sending
+              </button>
               ${draftSaved.ok && html`<span className="text-sm text-green-600 font-medium">${"✓"} Saved!</span>`}
               ${draftSaved.error && html`<span className="text-sm text-red-600 font-medium">${"✗"} ${draftSaved.error}</span>`}
             </div>
@@ -492,13 +497,14 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                           ${comp.company_name || siren}
                         </a>
                         ${emailInfo && !emailInfo.error && html`
-                          <span className=${"inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full " +
+                          <button onClick=${(e) => { e.stopPropagation(); toggleEmailDetail(siren); }}
+                            className=${"inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full cursor-pointer hover:opacity-80 " +
                             (emailInfo.type === "cfo" ? "bg-emerald-100 text-emerald-800 border border-emerald-300" :
                              emailInfo.type === "director" ? "bg-blue-100 text-blue-800 border border-blue-300" :
                              emailInfo.type === "company_guess" ? "bg-amber-100 text-amber-800 border border-amber-300" :
                              "bg-gray-100 text-gray-700 border border-gray-300")}>
-                            ${"📧"} ${emailInfo.type === "cfo" ? "CFO" : emailInfo.type === "director" ? "Director" : "EMAILS"}
-                          </span>
+                            ${"📧"} EMAILS
+                          </button>
                         `}
                         ${emailInfo && emailInfo.error && html`
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-50 text-red-600 border border-red-200">
@@ -520,7 +526,7 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                           </span>
                         </div>
                       `}
-                      ${emailInfo && emailInfo.email && html`
+                      ${expandedEmail[siren] && emailInfo && emailInfo.email && html`
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                           <a href=${"mailto:" + emailInfo.email}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
@@ -529,7 +535,7 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                           <span className="text-gray-400">(${emailInfo.source || ""})</span>
                         </div>
                       `}
-                      ${emailInfo && emailInfo.all_emails && emailInfo.all_emails.length > 1 && html`
+                      ${expandedEmail[siren] && emailInfo && emailInfo.all_emails && emailInfo.all_emails.length > 1 && html`
                         <div className="mt-0.5 flex flex-wrap gap-1 text-xs">
                           ${emailInfo.all_emails.slice(1, 3).map(e => html`
                             <span key=${e} className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-200">

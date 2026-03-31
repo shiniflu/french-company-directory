@@ -397,7 +397,7 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser, country = 
         const defaults = { pl: "orlen", us: "bank", gb: "vodafone", ua: "naftogaz", lt: "maxima" };
         const searchQuery = query.trim() || (document.querySelector('input[type="text"]') || {}).value || defaults[country] || "company";
         if (!searchQuery) { setLoading(false); return; }
-        const data = await searchCompaniesByCountry(country, searchQuery, 1, 25, controller.signal);
+        const data = await searchCompaniesByCountry(country, searchQuery, 1, 100, controller.signal);
         setAllResults(data.results || []);
         setTotalResults(data.total_results || 0);
         setLoadingProgress("");

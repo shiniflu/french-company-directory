@@ -1533,166 +1533,43 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                         "search_url": f"https://prs.ms.gov.pl/krs/wyszukiwanie?t:nazwaPodmiotu={urllib.parse.quote(q)}",
                     })
 
-            elif country == "us":
-                # USA - SEC EDGAR full-text search (free, no API key)
-                url = f"https://efts.sec.gov/LATEST/search-index?q=%22{urllib.parse.quote(q)}%22&dateRange=custom&startdt=2023-01-01&enddt=2026-12-31&forms=10-K,10-Q,8-K"
-                req = urllib.request.Request(url, headers={
-                    "Accept": "application/json",
-                    "User-Agent": "CompanyDirectory admin@example.com",
-                })
+            elif country in ("us", "gb", "ua", "lt"):
+                # GLEIF API - free global company search (Legal Entity Identifier)
+                country_codes = {"us": "US", "gb": "GB", "ua": "UA", "lt": "LT"}
+                cc = country_codes.get(country, "")
+                gleif_url = f"https://api.gleif.org/api/v1/lei-records?filter%5Bfulltext%5D={urllib.parse.quote(q)}&filter%5Bentity.legalAddress.country%5D={cc}&page%5Bsize%5D={per_page}&page%5Bnumber%5D={page}"
+                req = urllib.request.Request(gleif_url, headers={"Accept": "application/json"})
                 try:
                     with urllib.request.urlopen(req, timeout=15) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
-                        hits = data.get("hits", {}).get("hits", [])
-                        seen = {}
-                        for h in hits:
-                            s = h.get("_source", {})
-                            names = s.get("display_names", [])
-                            ciks = s.get("ciks", [])
-                            states = s.get("biz_states", [])
-                            for i, name in enumerate(names):
-                                cik = ciks[i] if i < len(ciks) else ""
-                                if cik and cik not in seen:
-                                    # Parse: "Apple Inc.  (AAPL)  (CIK 0000320193)"
-                                    clean_name = re.sub(r'\s*\(CIK \d+\)\s*', '', name).strip()
-                                    ticker = ""
-                                    tm = re.search(r'\(([A-Z]{1,5})\)', clean_name)
-                                    if tm:
-                                        ticker = tm.group(1)
-                                        clean_name = re.sub(r'\s*\([A-Z]{1,5}\)\s*', '', clean_name).strip()
-                                    state = states[i] if i < len(states) else ""
-                                    seen[cik] = {
-                                        "nom_complet": clean_name,
-                                        "siren": f"CIK {cik}",
-                                        "siege": {"libelle_commune": state, "code_postal": ""},
-                                        "categorie_entreprise": ticker,
-                                        "dirigeants": [],
-                                        "etat_administratif": "A",
-                                    }
-                            if len(seen) >= per_page:
-                                break
-                        results = list(seen.values())
-                        total = len(results)
-                        self.send_json(200, {"results": results, "total_results": total, "page": 1, "total_pages": 1})
-                except Exception as e:
-                    self.send_json(200, {"results": [], "total_results": 0, "page": 1, "total_pages": 0, "note": f"SEC EDGAR error: {str(e)}"})
-
-            elif country == "gb":
-                # UK - Scrape Companies House web search (no API key needed)
-                url = f"https://find-and-update.company-information.service.gov.uk/search?q={urllib.parse.quote(q)}"
-                req = urllib.request.Request(url, headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "text/html",
-                })
-                try:
-                    with urllib.request.urlopen(req, timeout=15) as resp:
-                        html_text = resp.read().decode("utf-8")
-                        import html as html_mod
-                        # Extract company links: href="/company/XXXXXXXX">NAME</a>
-                        matches = re.findall(r'href="/company/(\w+)"[^>]*>([^<]+)', html_text)
-                        results = []
-                        seen_nums = set()
-                        for num, name in matches:
-                            if num in seen_nums:
-                                continue
-                            seen_nums.add(num)
-                            clean_name = html_mod.unescape(name.strip())
-                            # Try to get status from nearby HTML
-                            status_match = re.search(rf'/company/{num}.*?(?:Active|Dissolved|Liquidation|Closed)', html_text[:html_text.find(f'/company/{num}') + 500] if f'/company/{num}' in html_text else "", re.DOTALL)
-                            results.append({
-                                "nom_complet": clean_name,
-                                "siren": num,
-                                "siege": {"libelle_commune": "United Kingdom", "code_postal": ""},
-                                "categorie_entreprise": "",
-                                "dirigeants": [],
-                                "etat_administratif": "A",
-                            })
-                        total = len(results)
-                        self.send_json(200, {"results": results, "total_results": total, "page": 1, "total_pages": 1})
-                except Exception as e:
-                    self.send_json(200, {"results": [], "total_results": 0, "page": 1, "total_pages": 0, "note": f"UK search error: {str(e)}"})
-
-            elif country == "ua":
-                # Ukraine - scrape YouControl or use data.gov.ua
-                # Try the official API first
-                try:
-                    edrpou = q.strip()
-                    if edrpou.isdigit() and len(edrpou) <= 10:
-                        # Direct EDRPOU lookup
-                        url = f"https://data.gov.ua/api/3/action/datastore_search?resource_id=1c7b3a0c-633d-4952-8703-9d41334c264e&q={edrpou}&limit={per_page}"
-                    else:
-                        url = f"https://data.gov.ua/api/3/action/datastore_search?resource_id=1c7b3a0c-633d-4952-8703-9d41334c264e&q={urllib.parse.quote(q)}&limit={per_page}"
-                    req = urllib.request.Request(url, headers={"Accept": "application/json"})
-                    with urllib.request.urlopen(req, timeout=15) as resp:
-                        data = json.loads(resp.read().decode("utf-8"))
-                        records = data.get("result", {}).get("records", [])
+                        records = data.get("data", [])
                         results = []
                         for r in records:
+                            attrs = r.get("attributes", {})
+                            entity = attrs.get("entity", {})
+                            legal_name = entity.get("legalName", {}).get("name", "")
+                            addr = entity.get("legalAddress", {})
+                            reg_num = entity.get("registeredAs", "") or attrs.get("lei", "")
+                            status = entity.get("status", "ACTIVE")
+                            cat = entity.get("legalForm", {}).get("id", "") if entity.get("legalForm") else ""
                             results.append({
-                                "nom_complet": r.get("name", r.get("short_name", "")),
-                                "siren": str(r.get("edrpou", r.get("code", ""))),
-                                "siege": {"libelle_commune": r.get("address", r.get("location", ""))[:40], "code_postal": ""},
-                                "categorie_entreprise": r.get("stan", r.get("status", "")),
+                                "nom_complet": legal_name,
+                                "siren": reg_num,
+                                "siege": {
+                                    "libelle_commune": addr.get("city", ""),
+                                    "code_postal": addr.get("postalCode", ""),
+                                },
+                                "categorie_entreprise": cat,
                                 "dirigeants": [],
-                                "etat_administratif": "A",
+                                "etat_administratif": "A" if status == "ACTIVE" else "C",
+                                "lei": attrs.get("lei", ""),
                             })
-                        total = data.get("result", {}).get("total", len(results))
-                        if results:
-                            self.send_json(200, {"results": results, "total_results": total, "page": 1, "total_pages": max(1, total // per_page)})
-                        else:
-                            # Fallback: give link
-                            self.send_json(200, {
-                                "results": [], "total_results": 0, "page": 1, "total_pages": 0,
-                                "note": f"No results found. Try searching at the official Ukrainian registry.",
-                                "search_url": f"https://usr.minjust.gov.ua/content/free-search?search={urllib.parse.quote(q)}",
-                            })
-                except Exception:
-                    self.send_json(200, {
-                        "results": [], "total_results": 0, "page": 1, "total_pages": 0,
-                        "note": "Search at the official Ukrainian registry:",
-                        "search_url": f"https://usr.minjust.gov.ua/content/free-search?search={urllib.parse.quote(q)}",
-                    })
-
-            elif country == "lt":
-                # Lithuania - scrape Registru Centras or use open data
-                try:
-                    url = f"https://www.registrucentras.lt/jar/p/dok.php?p={urllib.parse.quote(q)}"
-                    req = urllib.request.Request(url, headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                        "Accept": "text/html",
-                    })
-                    with urllib.request.urlopen(req, timeout=15) as resp:
-                        import html as html_mod
-                        html_text = resp.read().decode("utf-8", errors="replace")
-                        # Parse results - look for company code and name patterns
-                        matches = re.findall(r'dok\.php\?kod=(\d+)[^>]*>([^<]+)', html_text)
-                        results = []
-                        for code, name in matches:
-                            clean = html_mod.unescape(name.strip())
-                            if clean and code:
-                                results.append({
-                                    "nom_complet": clean,
-                                    "siren": code,
-                                    "siege": {"libelle_commune": "Lithuania", "code_postal": ""},
-                                    "categorie_entreprise": "",
-                                    "dirigeants": [],
-                                    "etat_administratif": "A",
-                                })
-                        total = len(results)
-                        if results:
-                            self.send_json(200, {"results": results, "total_results": total, "page": 1, "total_pages": 1})
-                        else:
-                            self.send_json(200, {
-                                "results": [], "total_results": 0, "page": 1, "total_pages": 0,
-                                "note": "No results found. Try the official Lithuanian registry:",
-                                "search_url": f"https://www.registrucentras.lt/jar/p/index.php?q={urllib.parse.quote(q)}",
-                            })
-                except Exception:
-                    self.send_json(200, {
-                        "results": [], "total_results": 0, "page": 1, "total_pages": 0,
-                        "note": "Search at the official Lithuanian registry:",
-                        "search_url": f"https://www.registrucentras.lt/jar/p/index.php?q={urllib.parse.quote(q)}",
-                    })
+                        pagination = data.get("meta", {}).get("pagination", {})
+                        total = pagination.get("total", len(results))
+                        total_pages = pagination.get("lastPage", max(1, total // per_page))
+                        self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": total_pages})
+                except Exception as e:
+                    self.send_json(200, {"results": [], "total_results": 0, "page": 1, "total_pages": 0, "note": f"GLEIF search error: {str(e)}"})
 
             else:
                 self.send_json(400, {"error": f"Unknown country: {country}"})

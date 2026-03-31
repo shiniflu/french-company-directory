@@ -43,7 +43,12 @@
           ],
           "type": "company_guess",
           "contact_name": "SNCF RESEAU",
-          "source": "domain_pattern"
+          "source": "domain_pattern",
+          "director": {
+            "name": "MATTHIEU CHABANEL",
+            "title": "Président du conseil d'administration et directeur général",
+            "is_cfo": true
+          }
         }
       },
       "775672272": {

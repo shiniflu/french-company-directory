@@ -393,8 +393,10 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser, country = 
     try {
       // Non-French countries: use proxy search
       if (country !== "fr") {
-        if (!query.trim()) { setLoading(false); return; }
-        const data = await searchCompaniesByCountry(country, query.trim(), 1, 25, controller.signal);
+        // Use query state, or fallback to DOM input value
+        const searchQuery = query.trim() || (document.querySelector('input[type="text"]') || {}).value || "";
+        if (!searchQuery) { setLoading(false); return; }
+        const data = await searchCompaniesByCountry(country, searchQuery, 1, 25, controller.signal);
         setAllResults(data.results || []);
         setTotalResults(data.total_results || 0);
         setLoadingProgress("");
@@ -404,7 +406,7 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser, country = 
         if (noteMsg || (data.results || []).length === 0) {
           setError(noteMsg + (searchUrl ? "\n\nSearch directly: " + searchUrl : ""));
         }
-        logActivity("search", country + ": " + query.trim());
+        logActivity("search", country + ": " + searchQuery);
         return;
       }
 
@@ -485,7 +487,7 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser, country = 
       setLoading(false);
       setLoadingProgress("");
     }
-  }, [query, filters]);
+  }, [query, filters, country]);
 
   const handleSearch = () => {
     doSearch();

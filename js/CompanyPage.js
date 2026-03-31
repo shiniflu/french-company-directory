@@ -1,6 +1,6 @@
 import { createElement, useState, useEffect, useRef } from "react";
 import htm from "htm";
-import { getCompanyBySiren, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany, scrapeWebsiteForCfo, getCells, createCell, addCompaniesToCell } from "./api.js?v=18";
+import { getCompanyBySiren, searchCompaniesByCountry, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany, scrapeWebsiteForCfo, getCells, createCell, addCompaniesToCell } from "./api.js?v=18";
 import { formatSiren, formatSiret, formatCurrency, formatDate, getEmployeeLabel,
          getLegalFormLabel, getNafSectionLabel, getLatestFinance,
          CATEGORY_STYLES, exportToCSV, exportToJSON, isInternationalTrade } from "./utils.js?v=18";
@@ -924,7 +924,7 @@ function ComplementsBadges({ complements }) {
 }
 
 // ── Company Page (main export) ──────────────────────
-export function CompanyPage({ siren, onNavigate, currentUser }) {
+export function CompanyPage({ siren, onNavigate, currentUser, country = "fr" }) {
   const username = currentUser ? currentUser.username : "";
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1014,10 +1014,14 @@ export function CompanyPage({ siren, onNavigate, currentUser }) {
     setLoading(true);
     setError(null);
 
-    getCompanyBySiren(siren, controller.signal)
+    const fetchPromise = country === "fr"
+      ? getCompanyBySiren(siren, controller.signal)
+      : searchCompaniesByCountry(country, siren, 1, 1, controller.signal).then(d => d.results && d.results[0] ? d.results[0] : null);
+
+    fetchPromise
       .then(data => {
         if (!data) {
-          setError("No company found with this SIREN.");
+          setError("No company found.");
         } else {
           setCompany(data);
         }

@@ -86,7 +86,11 @@
           "type": "company_guess",
           "contact_name": "BNP PARIBAS (HELLO BANK!)",
           "source": "domain_pattern",
-          "director": null
+          "director": {
+            "name": "YANN GERARDIN",
+            "title": "Directeur général délégué",
+            "is_cfo": true
+          }
         }
       },
       "775676182": {

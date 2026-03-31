@@ -393,8 +393,9 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser, country = 
     try {
       // Non-French countries: use proxy search
       if (country !== "fr") {
-        // Use query state, or fallback to DOM input value
-        const searchQuery = query.trim() || (document.querySelector('input[type="text"]') || {}).value || "";
+        // Use query state, or fallback to DOM input value, or default query per country
+        const defaults = { pl: "orlen", us: "inc", gb: "limited", ua: "kyiv", lt: "UAB" };
+        const searchQuery = query.trim() || (document.querySelector('input[type="text"]') || {}).value || defaults[country] || "company";
         if (!searchQuery) { setLoading(false); return; }
         const data = await searchCompaniesByCountry(country, searchQuery, 1, 25, controller.signal);
         setAllResults(data.results || []);

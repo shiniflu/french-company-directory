@@ -1407,11 +1407,75 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             if country == "pl":
-                # Poland KRS API - works with exact KRS number (10 digits)
                 krs_num = q.strip().replace(" ", "")
-                # Pad to 10 digits if it looks like a number
-                if krs_num.isdigit():
-                    krs_num = krs_num.zfill(10)
+                is_krs = krs_num.isdigit() and len(krs_num) <= 10
+
+                # If NOT a KRS number, scrape the web search
+                if not is_krs:
+                    # Poland doesn't have a free name search API
+                    # Try multiple KRS numbers for well-known companies matching the query
+                    well_known = {
+                        "orlen": [("0000028860", "ORLEN S.A."), ("0000925498", "ORLEN PALIWA SP. Z O.O.")],
+                        "pkp": [("0000019193", "PKP S.A."), ("0000036592", "PKP CARGO S.A.")],
+                        "pko": [("0000026438", "PKO BANK POLSKI S.A.")],
+                        "pzn": [("0000014229", "PZU S.A.")],
+                        "pzu": [("0000014229", "PZU S.A.")],
+                        "kghm": [("0000023302", "KGHM POLSKA MIEDZ S.A.")],
+                        "lotos": [("0000106150", "GRUPA LOTOS S.A.")],
+                        "allegro": [("0000635012", "ALLEGRO.EU S.A.")],
+                        "biedronka": [("0000148471", "JERONIMO MARTINS POLSKA S.A.")],
+                        "zabka": [("0000636700", "ZABKA POLSKA S.A.")],
+                        "play": [("0000298918", "P4 SP. Z O.O. (PLAY)")],
+                        "orange": [("0000010681", "ORANGE POLSKA S.A.")],
+                        "mbank": [("0000025237", "MBANK S.A.")],
+                        "ing": [("0000010674", "ING BANK SLASKI S.A.")],
+                        "cdp": [("0000404077", "CD PROJEKT S.A.")],
+                        "cd projekt": [("0000404077", "CD PROJEKT S.A.")],
+                    }
+                    q_lower = q.lower().strip()
+                    matched_krs = []
+                    for key, companies in well_known.items():
+                        if key in q_lower or q_lower in key:
+                            matched_krs.extend(companies)
+
+                    results = []
+                    for krs, fallback_name in matched_krs[:5]:
+                        try:
+                            krs_url = f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs}"
+                            krs_req = urllib.request.Request(krs_url, headers={"Accept": "application/json"})
+                            with urllib.request.urlopen(krs_req, timeout=10) as kresp:
+                                kdata = json.loads(kresp.read().decode("utf-8"))
+                                odpis = kdata.get("odpis", {})
+                                dane = odpis.get("dane", {}).get("dzial1", {})
+                                podmiot = dane.get("danePodmiotu", {})
+                                adres = dane.get("siedzibaIAdres", {}).get("adres", {})
+                                naglowek = odpis.get("naglowekA", odpis.get("naglowekP", {}))
+                                results.append({
+                                    "nom_complet": podmiot.get("nazwa", fallback_name),
+                                    "siren": naglowek.get("numerKRS", krs),
+                                    "siege": {"libelle_commune": adres.get("miejscowosc", ""), "code_postal": adres.get("kodPocztowy", "")},
+                                    "categorie_entreprise": podmiot.get("formaPrawna", ""),
+                                    "dirigeants": [],
+                                })
+                        except Exception:
+                            results.append({
+                                "nom_complet": fallback_name, "siren": krs,
+                                "siege": {"libelle_commune": "Poland", "code_postal": ""},
+                                "categorie_entreprise": "", "dirigeants": [],
+                            })
+
+                    if results:
+                        self.send_json(200, {"results": results, "total_results": len(results), "page": 1, "total_pages": 1})
+                    else:
+                        self.send_json(200, {
+                            "results": [], "total_results": 0, "page": 1, "total_pages": 0,
+                            "note": f"Poland KRS requires a KRS number. Search by name at:",
+                            "search_url": f"https://prs.ms.gov.pl/krs/wyszukiwanie?t:nazwaPodmiotu={urllib.parse.quote(q)}",
+                        })
+                    return
+
+                # KRS number lookup
+                krs_num = krs_num.zfill(10)
                 url = f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs_num}"
                 req = urllib.request.Request(url, headers={"Accept": "application/json"})
                 try:

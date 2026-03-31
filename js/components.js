@@ -89,10 +89,12 @@ export function Footer() {
 export const COUNTRIES = [
   { code: "fr", flag: "\uD83C\uDDEB\uD83C\uDDF7", name: "France", active: true },
   { code: "pl", flag: "\uD83C\uDDF5\uD83C\uDDF1", name: "Poland", active: true },
-  { code: "us", flag: "\uD83C\uDDFA\uD83C\uDDF8", name: "USA", active: true },
-  { code: "ua", flag: "\uD83C\uDDFA\uD83C\uDDE6", name: "Ukraine", active: true },
-  { code: "lt", flag: "\uD83C\uDDF1\uD83C\uDDF9", name: "Lithuania", active: true },
   { code: "gb", flag: "\uD83C\uDDEC\uD83C\uDDE7", name: "UK", active: true },
+  { code: "us", flag: "\uD83C\uDDFA\uD83C\uDDF8", name: "USA", active: true },
+  { code: "ee", flag: "\uD83C\uDDEA\uD83C\uDDEA", name: "Estonia", active: true },
+  { code: "lt", flag: "\uD83C\uDDF1\uD83C\uDDF9", name: "Lithuania", active: true },
+  { code: "lv", flag: "\uD83C\uDDF1\uD83C\uDDFB", name: "Latvia", active: true },
+  { code: "ua", flag: "\uD83C\uDDFA\uD83C\uDDE6", name: "Ukraine", active: true },
 ];
 
 export function CountrySelector({ selectedCountry, onSelectCountry }) {

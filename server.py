@@ -1565,9 +1565,66 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                         "search_url": f"https://prs.ms.gov.pl/krs/wyszukiwanie?t:nazwaPodmiotu={urllib.parse.quote(q)}",
                     })
 
-            elif country in ("us", "gb", "ua", "lt"):
+            elif country == "ee":
+                # Estonia - ariregister.rik.ee API (free, real company data)
+                ee_q = q.strip() if q.strip() else "tallinn"
+                ee_url = f"https://ariregister.rik.ee/est/api/autocomplete?q={urllib.parse.quote(ee_q)}&lang=eng"
+                req = urllib.request.Request(ee_url, headers={
+                    "Accept": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                })
+                try:
+                    with urllib.request.urlopen(req, timeout=15, context=ssl_ctx) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        records = data.get("data", [])
+                        results = []
+                        for r in records:
+                            results.append({
+                                "nom_complet": r.get("name", ""),
+                                "siren": str(r.get("reg_code", "")),
+                                "siege": {
+                                    "libelle_commune": r.get("legal_address", ""),
+                                    "code_postal": r.get("zip_code", ""),
+                                },
+                                "categorie_entreprise": r.get("legal_form", ""),
+                                "dirigeants": [],
+                                "etat_administratif": "A" if r.get("status") == "R" else "C",
+                                "url": r.get("url", ""),
+                            })
+                        self.send_json(200, {"results": results, "total_results": len(results), "page": 1, "total_pages": 1})
+                        return
+                except Exception:
+                    pass
+                # Fallback to GLEIF for Estonia
+                gleif_url = f"https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalAddress.country%5D=EE&filter%5Bentity.status%5D=ACTIVE&page%5Bsize%5D={per_page}&page%5Bnumber%5D={page}"
+                if ee_q and ee_q != "tallinn":
+                    gleif_url = f"https://api.gleif.org/api/v1/lei-records?filter%5Bfulltext%5D={urllib.parse.quote(ee_q)}&filter%5Bentity.legalAddress.country%5D=EE&page%5Bsize%5D={per_page}&page%5Bnumber%5D={page}"
+                try:
+                    greq = urllib.request.Request(gleif_url, headers={"Accept": "application/json"})
+                    with urllib.request.urlopen(greq, timeout=15) as gresp:
+                        gdata = json.loads(gresp.read().decode("utf-8"))
+                        results = []
+                        for r in gdata.get("data", []):
+                            attrs = r.get("attributes", {})
+                            entity = attrs.get("entity", {})
+                            addr = entity.get("legalAddress", {})
+                            results.append({
+                                "nom_complet": entity.get("legalName", {}).get("name", ""),
+                                "siren": entity.get("registeredAs", "") or attrs.get("lei", ""),
+                                "siege": {"libelle_commune": addr.get("city", ""), "code_postal": addr.get("postalCode", "")},
+                                "categorie_entreprise": "",
+                                "dirigeants": [],
+                                "etat_administratif": "A",
+                            })
+                        total = gdata.get("meta", {}).get("pagination", {}).get("total", len(results))
+                        total_pages = gdata.get("meta", {}).get("pagination", {}).get("lastPage", 1)
+                        self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": total_pages})
+                except Exception as e:
+                    self.send_json(200, {"results": [], "total_results": 0, "note": f"Estonia search error: {str(e)}"})
+
+            elif country in ("us", "gb", "ua", "lt", "lv"):
                 # GLEIF API - free global company search (Legal Entity Identifier)
-                country_codes = {"us": "US", "gb": "GB", "ua": "UA", "lt": "LT"}
+                country_codes = {"us": "US", "gb": "GB", "ua": "UA", "lt": "LT", "lv": "LV"}
                 cc = country_codes.get(country, "")
                 # If query is generic/default, browse all companies in that country
                 browse_defaults = {"bank", "company", "inc", "limited", "vodafone", "naftogaz", "maxima", "llc", "ltd"}

@@ -1622,6 +1622,75 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception as e:
                     self.send_json(200, {"results": [], "total_results": 0, "note": f"Estonia search error: {str(e)}"})
 
+            elif country == "no":
+                # Norway BRREG API - free, no key needed, includes directors!
+                if q.strip():
+                    brreg_url = f"https://data.brreg.no/enhetsregisteret/api/enheter?navn={urllib.parse.quote(q)}&size={per_page}&page={page-1}"
+                else:
+                    # Browse newest companies
+                    brreg_url = f"https://data.brreg.no/enhetsregisteret/api/enheter?size={per_page}&page={page-1}&sort=registreringsdatoEnhetsregisteret,desc"
+                req = urllib.request.Request(brreg_url, headers={"Accept": "application/json"})
+                try:
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        enheter = data.get("_embedded", {}).get("enheter", [])
+                        pagination = data.get("page", {})
+                        total = pagination.get("totalElements", len(enheter))
+                        total_pages = pagination.get("totalPages", 1)
+                        results = []
+                        for c in enheter:
+                            addr = c.get("forretningsadresse", c.get("postadresse", {}))
+                            nace = c.get("naeringskode1", {})
+                            org_num = str(c.get("organisasjonsnummer", ""))
+
+                            # Fetch directors (roles) for each company
+                            directors = []
+                            try:
+                                roles_url = f"https://data.brreg.no/enhetsregisteret/api/enheter/{org_num}/roller"
+                                roles_req = urllib.request.Request(roles_url, headers={"Accept": "application/json"})
+                                with urllib.request.urlopen(roles_req, timeout=8) as roles_resp:
+                                    roles_data = json.loads(roles_resp.read().decode("utf-8"))
+                                    for rg in roles_data.get("rollegrupper", []):
+                                        for r in rg.get("roller", []):
+                                            person = r.get("person", {})
+                                            navn = person.get("navn", {})
+                                            first = navn.get("fornavn", "")
+                                            last = navn.get("etternavn", "")
+                                            role_name = r.get("type", {}).get("beskrivelse", "")
+                                            dob = person.get("fodselsdato", "")
+                                            if first or last:
+                                                directors.append({
+                                                    "nom": last,
+                                                    "prenoms": first,
+                                                    "qualite": role_name,
+                                                    "type_dirigeant": "personne physique",
+                                                    "date_of_birth": dob,
+                                                })
+                            except Exception:
+                                pass
+
+                            results.append({
+                                "nom_complet": c.get("navn", ""),
+                                "siren": org_num,
+                                "siege": {
+                                    "libelle_commune": addr.get("kommune", addr.get("poststed", "")),
+                                    "code_postal": addr.get("postnummer", ""),
+                                    "adresse": " ".join(addr.get("adresse", [])),
+                                },
+                                "categorie_entreprise": c.get("organisasjonsform", {}).get("beskrivelse", ""),
+                                "activite_principale": nace.get("kode", ""),
+                                "activite_description": nace.get("beskrivelse", ""),
+                                "dirigeants": directors,
+                                "nombre_etablissements": c.get("antallAnsatte", ""),
+                                "etat_administratif": "A",
+                                "date_creation": c.get("registreringsdatoEnhetsregisteret", ""),
+                                "website": c.get("hjemmeside", ""),
+                            })
+
+                        self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": total_pages})
+                except Exception as e:
+                    self.send_json(200, {"results": [], "total_results": 0, "note": f"Norway BRREG error: {str(e)}"})
+
             elif country in ("us", "gb", "ua", "lt", "lv"):
                 # GLEIF API - free global company search (Legal Entity Identifier)
                 country_codes = {"us": "US", "gb": "GB", "ua": "UA", "lt": "LT", "lv": "LV"}

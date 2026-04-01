@@ -94,6 +94,7 @@ export const COUNTRIES = [
   { code: "ee", flag: "\uD83C\uDDEA\uD83C\uDDEA", name: "Estonia", active: true },
   { code: "lt", flag: "\uD83C\uDDF1\uD83C\uDDF9", name: "Lithuania", active: true },
   { code: "lv", flag: "\uD83C\uDDF1\uD83C\uDDFB", name: "Latvia", active: true },
+  { code: "no", flag: "\uD83C\uDDF3\uD83C\uDDF4", name: "Norway", active: true },
   { code: "ua", flag: "\uD83C\uDDFA\uD83C\uDDE6", name: "Ukraine", active: true },
 ];
 

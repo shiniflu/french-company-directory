@@ -1624,6 +1624,47 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
 
             elif country == "no":
                 # Norway BRREG API - free, no key needed, includes directors!
+                # If query is all digits, do direct org number lookup
+                if q.strip() and q.strip().isdigit():
+                    try:
+                        direct_url = f"https://data.brreg.no/enhetsregisteret/api/enheter/{q.strip()}"
+                        dreq = urllib.request.Request(direct_url, headers={"Accept": "application/json"})
+                        with urllib.request.urlopen(dreq, timeout=10) as dresp:
+                            c = json.loads(dresp.read().decode("utf-8"))
+                            org_num = str(c.get("organisasjonsnummer", ""))
+                            addr = c.get("forretningsadresse", c.get("postadresse", {}))
+                            nace = c.get("naeringskode1", {})
+                            directors = []
+                            try:
+                                rurl = f"https://data.brreg.no/enhetsregisteret/api/enheter/{org_num}/roller"
+                                rreq = urllib.request.Request(rurl, headers={"Accept": "application/json"})
+                                with urllib.request.urlopen(rreq, timeout=8) as rresp:
+                                    rdata = json.loads(rresp.read().decode("utf-8"))
+                                    for rg in rdata.get("rollegrupper", []):
+                                        for r in rg.get("roller", []):
+                                            p = r.get("person", {})
+                                            n = p.get("navn", {})
+                                            if n.get("fornavn") or n.get("etternavn"):
+                                                directors.append({"nom": n.get("etternavn", ""), "prenoms": n.get("fornavn", ""), "qualite": r.get("type", {}).get("beskrivelse", ""), "type_dirigeant": "personne physique"})
+                            except Exception:
+                                pass
+                            result = {
+                                "nom_complet": c.get("navn", ""),
+                                "siren": org_num,
+                                "siege": {"libelle_commune": addr.get("kommune", addr.get("poststed", "")), "code_postal": addr.get("postnummer", ""), "adresse": " ".join(addr.get("adresse", []))},
+                                "categorie_entreprise": c.get("organisasjonsform", {}).get("beskrivelse", ""),
+                                "activite_principale": nace.get("kode", ""),
+                                "activite_description": nace.get("beskrivelse", ""),
+                                "dirigeants": directors,
+                                "nombre_etablissements": c.get("antallAnsatte", ""),
+                                "etat_administratif": "A",
+                                "date_creation": c.get("registreringsdatoEnhetsregisteret", ""),
+                                "website": c.get("hjemmeside", ""),
+                            }
+                            self.send_json(200, {"results": [result], "total_results": 1, "page": 1, "total_pages": 1})
+                            return
+                    except Exception:
+                        pass
                 if q.strip():
                     brreg_url = f"https://data.brreg.no/enhetsregisteret/api/enheter?navn={urllib.parse.quote(q)}&size={per_page}&page={page-1}"
                 else:

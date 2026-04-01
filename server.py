@@ -1745,9 +1745,54 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception as e:
                     self.send_json(200, {"results": [], "total_results": 0, "note": f"Denmark search error: {str(e)}"})
 
-            elif country in ("us", "gb", "ua", "lt", "lv"):
+            elif country == "fi":
+                # Finland PRH API - free, 814K companies
+                if q.strip():
+                    fi_url = f"https://avoindata.prh.fi/opendata-ytj-api/v3/companies?name={urllib.parse.quote(q)}&totalResults=true&maxResults={per_page}&resultsFrom={(page-1)*per_page}"
+                else:
+                    fi_url = f"https://avoindata.prh.fi/opendata-ytj-api/v3/companies?totalResults=true&maxResults={per_page}&resultsFrom={(page-1)*per_page}"
+                req = urllib.request.Request(fi_url, headers={"Accept": "application/json"})
+                try:
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        companies_list = data.get("companies", data.get("results", []))
+                        total = data.get("totalResults", len(companies_list))
+                        results = []
+                        for c in companies_list:
+                            bid = c.get("businessId", {})
+                            names = c.get("names", [])
+                            name = names[0].get("name", "") if names else ""
+                            addrs = c.get("addresses", [])
+                            addr = addrs[0] if addrs else {}
+                            bl = c.get("mainBusinessLine", {})
+                            descs = bl.get("descriptions", [])
+                            activity = ""
+                            for d_item in descs:
+                                if d_item.get("languageCode") == "3":  # English
+                                    activity = d_item.get("description", "")
+                                    break
+                            if not activity and descs:
+                                activity = descs[0].get("description", "")
+                            results.append({
+                                "nom_complet": name,
+                                "siren": bid.get("value", "") if isinstance(bid, dict) else str(bid),
+                                "siege": {
+                                    "libelle_commune": addr.get("city", ""),
+                                    "code_postal": addr.get("postCode", ""),
+                                },
+                                "categorie_entreprise": c.get("companyForm", ""),
+                                "activite_description": activity,
+                                "dirigeants": [],
+                                "etat_administratif": "A",
+                                "date_creation": bid.get("registrationDate", "") if isinstance(bid, dict) else "",
+                            })
+                        self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": max(1, total // per_page)})
+                except Exception as e:
+                    self.send_json(200, {"results": [], "total_results": 0, "note": f"Finland error: {str(e)}"})
+
+            elif country in ("us", "gb", "ua", "lt", "lv", "sk", "be", "ie"):
                 # GLEIF API - free global company search (Legal Entity Identifier)
-                country_codes = {"us": "US", "gb": "GB", "ua": "UA", "lt": "LT", "lv": "LV"}
+                country_codes = {"us": "US", "gb": "GB", "ua": "UA", "lt": "LT", "lv": "LV", "sk": "SK", "be": "BE", "ie": "IE"}
                 cc = country_codes.get(country, "")
                 # If query is generic/default, browse all companies in that country
                 browse_defaults = {"bank", "company", "inc", "limited", "vodafone", "naftogaz", "maxima", "llc", "ltd"}

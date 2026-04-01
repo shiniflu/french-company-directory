@@ -393,19 +393,15 @@ export function SearchPage({ onNavigate, searchStateRef, currentUser, country = 
     try {
       // Non-French countries: use proxy search
       if (country !== "fr") {
-        // Use query state, or fallback to DOM input value, or default query per country
-        const defaults = { pl: "orlen", us: "bank", gb: "vodafone", ua: "naftogaz", lt: "maxima" };
-        const searchQuery = query.trim() || (document.querySelector('input[type="text"]') || {}).value || defaults[country] || "company";
-        if (!searchQuery) { setLoading(false); return; }
+        // Use query or empty string (server returns browsable results for empty)
+        const searchQuery = query.trim() || (document.querySelector('input[type="text"]') || {}).value || "";
         const data = await searchCompaniesByCountry(country, searchQuery, 1, 100, controller.signal);
         setAllResults(data.results || []);
         setTotalResults(data.total_results || 0);
         setLoadingProgress("");
         setLoading(false);
-        const noteMsg = data.note || "";
-        const searchUrl = data.search_url || "";
-        if (noteMsg || (data.results || []).length === 0) {
-          setError(noteMsg + (searchUrl ? "\n\nSearch directly: " + searchUrl : ""));
+        if (data.note) {
+          setError(data.note + (data.search_url ? " " + data.search_url : ""));
         }
         logActivity("search", country + ": " + searchQuery);
         return;

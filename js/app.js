@@ -183,7 +183,7 @@ function App() {
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
         ${route.page === "company"
           ? html`<${CompanyPage} key=${route.siren} siren=${route.siren} onNavigate=${navigate} currentUser=${currentUser} country=${country} />`
-          : html`<${SearchPage} onNavigate=${navigate} searchStateRef=${searchStateRef} currentUser=${currentUser} country=${country} />`
+          : html`<${SearchPage} key=${country} onNavigate=${navigate} searchStateRef=${searchStateRef} currentUser=${currentUser} country=${country} />`
         }
       </main>
       <${Footer} />

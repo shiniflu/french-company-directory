@@ -1876,6 +1876,153 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception as e:
                     self.send_json(200, {"results": [], "total_results": 0, "page": 1, "total_pages": 0, "note": f"GLEIF search error: {str(e)}"})
 
+            elif country == "fi":
+                # Finland PRH API - free, includes company details
+                if q.strip() and re.match(r'^\d{7}-\d$', q.strip()):
+                    # Direct business ID lookup
+                    fi_url = f"https://avoindata.prh.fi/opendata-ytj-api/v3/companies?businessId={urllib.parse.quote(q.strip())}&totalResults=true&maxResults=1"
+                elif q.strip():
+                    fi_url = f"https://avoindata.prh.fi/opendata-ytj-api/v3/companies?name={urllib.parse.quote(q)}&totalResults=true&maxResults={per_page}"
+                else:
+                    fi_url = f"https://avoindata.prh.fi/opendata-ytj-api/v3/companies?totalResults=true&maxResults={per_page}"
+                try:
+                    req = urllib.request.Request(fi_url, headers={"Accept": "application/json"})
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        results = []
+                        for c in data.get("companies", []):
+                            bid = c.get("businessId", {}).get("value", "")
+                            names = c.get("names", [])
+                            name = names[0].get("name", "") if names else ""
+                            addrs = c.get("addresses", [])
+                            city = ""
+                            postal = ""
+                            for a in addrs:
+                                if a.get("city"):
+                                    city = a.get("city", "")
+                                    postal = a.get("postCode", "")
+                                    break
+                            forms = c.get("companyForms", [])
+                            form_name = ""
+                            if forms:
+                                descs = forms[0].get("descriptions", [])
+                                form_name = descs[0].get("description", "") if descs else ""
+                            blines = c.get("businessLines", [])
+                            activity = ""
+                            if blines:
+                                bdescs = blines[0].get("descriptions", [])
+                                activity = bdescs[0].get("description", "") if bdescs else ""
+                            websites = c.get("websites", [])
+                            website = websites[0].get("url", "") if websites else ""
+                            contacts = c.get("contactDetails", [])
+                            phone = ""
+                            email = ""
+                            for cd in contacts:
+                                if cd.get("type") == "Puhelin" and not phone:
+                                    phone = cd.get("value", "")
+                                if cd.get("type") == "Kotisivun www-osoite" and not website:
+                                    website = cd.get("value", "")
+                            results.append({
+                                "nom_complet": name,
+                                "siren": bid,
+                                "siege": {"libelle_commune": city, "code_postal": postal},
+                                "categorie_entreprise": form_name,
+                                "activite_principale": "",
+                                "activite_description": activity,
+                                "dirigeants": [],
+                                "etat_administratif": "A",
+                                "website": website,
+                                "company_phone": phone,
+                                "company_email": email,
+                            })
+                        total = data.get("totalResults", len(results))
+                        self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": max(1, (total // per_page) + 1)})
+                except Exception as e:
+                    self.send_json(200, {"results": [], "total_results": 0, "page": 1, "total_pages": 0, "note": f"Finland PRH error: {str(e)}"})
+
+            elif country == "cz":
+                # Czech Republic ARES API - free, includes directors
+                if q.strip() and q.strip().isdigit() and len(q.strip()) == 8:
+                    # Direct ICO lookup
+                    try:
+                        cz_url = f"https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/{q.strip()}"
+                        req = urllib.request.Request(cz_url, headers={"Accept": "application/json"})
+                        with urllib.request.urlopen(req, timeout=15) as resp:
+                            d = json.loads(resp.read().decode("utf-8"))
+                            addr = d.get("sidlo", {})
+                            directors = []
+                            for item in d.get("dalsiUdaje", []):
+                                for uo in item.get("udpisovaUdaje", []):
+                                    for so in uo.get("statutarniOrgan", []):
+                                        for cl in so.get("clenove", []):
+                                            osoba = cl.get("osoba", {})
+                                            if osoba.get("jmeno") or osoba.get("prijmeni"):
+                                                directors.append({
+                                                    "nom": osoba.get("prijmeni", ""),
+                                                    "prenoms": osoba.get("jmeno", ""),
+                                                    "qualite": cl.get("funkce", ""),
+                                                    "type_dirigeant": "personne physique",
+                                                })
+                            result = {
+                                "nom_complet": d.get("obchodniJmeno", ""),
+                                "siren": d.get("ico", ""),
+                                "siege": {"libelle_commune": addr.get("textovaAdresa", ""), "code_postal": ""},
+                                "categorie_entreprise": str(d.get("pravniForma", "")),
+                                "dirigeants": directors,
+                                "etat_administratif": "A",
+                                "date_creation": d.get("datumVzniku", ""),
+                            }
+                            self.send_json(200, {"results": [result], "total_results": 1, "page": 1, "total_pages": 1})
+                            return
+                    except Exception:
+                        pass
+
+                # Text search via POST
+                try:
+                    cz_url = "https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/vyhledat"
+                    search_body = json.dumps({"obchodniJmeno": q.strip() or "*", "start": (page - 1) * per_page, "pocet": per_page}).encode("utf-8")
+                    req = urllib.request.Request(cz_url, data=search_body, headers={"Accept": "application/json", "Content-Type": "application/json"}, method="POST")
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        results = []
+                        for s in data.get("ekonomickeSubjekty", []):
+                            addr = s.get("sidlo", {})
+                            results.append({
+                                "nom_complet": s.get("obchodniJmeno", ""),
+                                "siren": str(s.get("ico", "")),
+                                "siege": {"libelle_commune": addr.get("textovaAdresa", ""), "code_postal": ""},
+                                "categorie_entreprise": str(s.get("pravniForma", "")),
+                                "dirigeants": [],
+                                "etat_administratif": "A",
+                            })
+                        total = data.get("pocetCelkem", len(results))
+                        self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": max(1, (total // per_page) + 1)})
+                except Exception as e:
+                    # Fallback to GLEIF
+                    try:
+                        gleif_url = f"https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalAddress.country%5D=CZ&filter%5Bentity.status%5D=ACTIVE&page%5Bsize%5D={per_page}&page%5Bnumber%5D={page}"
+                        if q.strip():
+                            gleif_url = f"https://api.gleif.org/api/v1/lei-records?filter%5Bfulltext%5D={urllib.parse.quote(q)}&filter%5Bentity.legalAddress.country%5D=CZ&page%5Bsize%5D={per_page}&page%5Bnumber%5D={page}"
+                        greq = urllib.request.Request(gleif_url, headers={"Accept": "application/json"})
+                        with urllib.request.urlopen(greq, timeout=15) as gresp:
+                            gdata = json.loads(gresp.read().decode("utf-8"))
+                            results = []
+                            for r in gdata.get("data", []):
+                                entity = r["attributes"]["entity"]
+                                addr = entity["legalAddress"]
+                                results.append({
+                                    "nom_complet": entity.get("legalName", {}).get("name", ""),
+                                    "siren": entity.get("registeredAs", "") or r["attributes"].get("lei", ""),
+                                    "siege": {"libelle_commune": addr.get("city", ""), "code_postal": addr.get("postalCode", "")},
+                                    "categorie_entreprise": "",
+                                    "dirigeants": [],
+                                    "etat_administratif": "A",
+                                })
+                            total = gdata.get("meta", {}).get("pagination", {}).get("total", len(results))
+                            self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": max(1, total // per_page)})
+                    except Exception:
+                        self.send_json(200, {"results": [], "total_results": 0, "page": 1, "total_pages": 0, "note": f"Czech ARES error: {str(e)}"})
+
             else:
                 self.send_json(400, {"error": f"Unknown country: {country}"})
 

@@ -97,6 +97,7 @@ export const COUNTRIES = [
   { code: "no", flag: "\uD83C\uDDF3\uD83C\uDDF4", name: "Norway", active: true },
   { code: "dk", flag: "\uD83C\uDDE9\uD83C\uDDF0", name: "Denmark", active: true },
   { code: "fi", flag: "\uD83C\uDDEB\uD83C\uDDEE", name: "Finland", active: true },
+  { code: "cz", flag: "\uD83C\uDDE8\uD83C\uDDFF", name: "Czechia", active: true },
   { code: "sk", flag: "\uD83C\uDDF8\uD83C\uDDF0", name: "Slovakia", active: true },
   { code: "be", flag: "\uD83C\uDDE7\uD83C\uDDEA", name: "Belgium", active: true },
   { code: "ie", flag: "\uD83C\uDDEE\uD83C\uDDEA", name: "Ireland", active: true },

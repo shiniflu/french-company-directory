@@ -1,6 +1,6 @@
 import { createElement, useState, useEffect, useRef } from "react";
 import htm from "htm";
-import { getCompanyBySiren, searchCompaniesByCountry, getCompanyByCountry, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany, scrapeWebsiteForCfo, getCells, createCell, addCompaniesToCell } from "./api.js?v=18";
+import { getCompanyBySiren, searchCompaniesByCountry, getCompanyByCountry, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany, scrapeWebsiteForCfo, getCells, createCell, addCompaniesToCell, findCompanyEmail } from "./api.js?v=18";
 import { formatSiren, formatSiret, formatCurrency, formatDate, getEmployeeLabel,
          getLegalFormLabel, getNafSectionLabel, getLatestFinance,
          CATEGORY_STYLES, exportToCSV, exportToJSON, isInternationalTrade } from "./utils.js?v=18";
@@ -519,6 +519,97 @@ function DirectorsList({ dirigeants, companyName, username }) {
                 className="mt-3 text-sm text-blue-600 hover:text-blue-800">
           Show all directors (${dirigeants.length})
         </button>
+      `}
+    </div>
+  `;
+}
+
+// ── Email Finder Section (works for ALL countries) ──
+function EmailFinderSection({ siren, companyName, companyEmail, companyPhone }) {
+  const [emailData, setEmailData] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState(null);
+  const [showEmails, setShowEmails] = useState(false);
+
+  // Auto-search on mount
+  useEffect(() => {
+    let cancelled = false;
+    setSearching(true);
+    findCompanyEmail(siren, companyName || "")
+      .then(data => { if (!cancelled) setEmailData(data); })
+      .catch(e => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setSearching(false); });
+    return () => { cancelled = true; };
+  }, [siren, companyName]);
+
+  // Combine found emails with company-provided ones
+  const allEmails = [];
+  if (companyEmail) allEmails.push({ email: companyEmail, source: "registry" });
+  if (emailData && emailData.email) allEmails.push({ email: emailData.email, source: emailData.source || "found" });
+  if (emailData && emailData.all_emails) {
+    emailData.all_emails.forEach(e => {
+      if (!allEmails.find(a => a.email === e)) allEmails.push({ email: e, source: "website" });
+    });
+  }
+
+  return html`
+    <div className="bg-white rounded-lg shadow-sm border border-blue-200 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-blue-800 uppercase tracking-wide">${"📧"} Company Emails</h3>
+        ${searching && html`
+          <span className="text-xs text-gray-400 flex items-center gap-1">
+            <div className="spinner" style=${{ width: "0.8rem", height: "0.8rem", borderWidth: "2px" }}></div>
+            Searching...
+          </span>
+        `}
+      </div>
+
+      ${companyPhone && html`
+        <div className="mb-3 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-green-50 text-green-700 border border-green-200 text-sm">
+            ${"📱"} <a href=${"tel:" + companyPhone} className="hover:underline font-mono">${companyPhone}</a>
+          </span>
+        </div>
+      `}
+
+      ${emailData && emailData.director && html`
+        <div className="mb-3 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-sky-50 text-sky-800 border border-sky-200 text-sm">
+            ${"👤"} ${emailData.director.name}
+            <span className="text-sky-500 text-xs">— ${emailData.director.title}</span>
+          </span>
+        </div>
+      `}
+
+      ${allEmails.length > 0 && html`
+        <div>
+          <button onClick=${() => setShowEmails(!showEmails)}
+            className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors " +
+              (showEmails ? "bg-blue-100 text-blue-800 border-blue-300" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100")}>
+            ${"📧"} ${showEmails ? "Hide Emails" : "Show Emails"} (${allEmails.length})
+          </button>
+          ${showEmails && html`
+            <div className="mt-2 space-y-1">
+              ${allEmails.map((item, i) => html`
+                <div key=${i} className="flex items-center gap-2 text-sm">
+                  <a href=${"mailto:" + item.email}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
+                    ${"📧"} ${item.email}
+                  </a>
+                  <span className="text-xs text-gray-400">(${item.source})</span>
+                </div>
+              `)}
+            </div>
+          `}
+        </div>
+      `}
+
+      ${!searching && allEmails.length === 0 && html`
+        <p className="text-sm text-gray-400">No emails found for this company.</p>
+      `}
+
+      ${error && !emailData && html`
+        <p className="text-sm text-red-500">${error}</p>
       `}
     </div>
   `;
@@ -1167,8 +1258,15 @@ export function CompanyPage({ siren, onNavigate, currentUser, country = "fr" }) 
           </div>
 
           <div className="mt-6">
-            <${CfoSection} siren=${company.siren} companyName=${company.nom_complet} dirigeants=${company.dirigeants} username=${username} />
+            <${EmailFinderSection} siren=${company.siren} companyName=${company.nom_complet}
+              companyEmail=${company.company_email || ""} companyPhone=${company.company_phone || ""} />
           </div>
+
+          ${country === "fr" && html`
+            <div className="mt-6">
+              <${CfoSection} siren=${company.siren} companyName=${company.nom_complet} dirigeants=${company.dirigeants} username=${username} />
+            </div>
+          `}
 
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
             <${FinancesCard} finances=${company.finances} />

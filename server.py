@@ -1691,6 +1691,60 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception as e:
                     self.send_json(200, {"results": [], "total_results": 0, "note": f"Norway BRREG error: {str(e)}"})
 
+            elif country == "dk":
+                # Denmark - GLEIF for search + cvrapi.dk for detail enrichment
+                if q.strip():
+                    gleif_url = f"https://api.gleif.org/api/v1/lei-records?filter%5Bfulltext%5D={urllib.parse.quote(q)}&filter%5Bentity.legalAddress.country%5D=DK&page%5Bsize%5D={per_page}&page%5Bnumber%5D={page}"
+                else:
+                    gleif_url = f"https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalAddress.country%5D=DK&filter%5Bentity.status%5D=ACTIVE&page%5Bsize%5D={per_page}&page%5Bnumber%5D={page}"
+                req = urllib.request.Request(gleif_url, headers={"Accept": "application/json"})
+                try:
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        records = data.get("data", [])
+                        results = []
+                        for r in records:
+                            attrs = r.get("attributes", {})
+                            entity = attrs.get("entity", {})
+                            addr = entity.get("legalAddress", {})
+                            legal_name = entity.get("legalName", {}).get("name", "")
+                            reg_num = entity.get("registeredAs", "") or attrs.get("lei", "")
+
+                            # Try cvrapi.dk for extra detail (phone, industry)
+                            phone = ""
+                            industry = ""
+                            company_type = ""
+                            try:
+                                cvr_url = f"https://cvrapi.dk/api?search={urllib.parse.quote(legal_name)}&country=dk"
+                                cvr_req = urllib.request.Request(cvr_url, headers={"User-Agent": "CompanyDir", "Accept": "application/json"})
+                                with urllib.request.urlopen(cvr_req, timeout=5) as cvr_resp:
+                                    cvr_data = json.loads(cvr_resp.read().decode("utf-8"))
+                                    if isinstance(cvr_data, dict):
+                                        phone = cvr_data.get("phone", "") or ""
+                                        industry = cvr_data.get("industrydesc", "") or ""
+                                        company_type = cvr_data.get("companydesc", "") or ""
+                                        if cvr_data.get("vat"):
+                                            reg_num = str(cvr_data["vat"])
+                            except Exception:
+                                pass
+
+                            results.append({
+                                "nom_complet": legal_name,
+                                "siren": reg_num,
+                                "siege": {"libelle_commune": addr.get("city", ""), "code_postal": addr.get("postalCode", "")},
+                                "categorie_entreprise": company_type or (entity.get("legalForm", {}).get("id", "") if entity.get("legalForm") else ""),
+                                "activite_description": industry,
+                                "dirigeants": [],
+                                "etat_administratif": "A" if entity.get("status") == "ACTIVE" else "C",
+                                "phone": phone,
+                            })
+                        pagination = data.get("meta", {}).get("pagination", {})
+                        total = pagination.get("total", len(results))
+                        total_pages = pagination.get("lastPage", max(1, total // per_page))
+                        self.send_json(200, {"results": results, "total_results": total, "page": page, "total_pages": total_pages})
+                except Exception as e:
+                    self.send_json(200, {"results": [], "total_results": 0, "note": f"Denmark search error: {str(e)}"})
+
             elif country in ("us", "gb", "ua", "lt", "lv"):
                 # GLEIF API - free global company search (Legal Entity Identifier)
                 country_codes = {"us": "US", "gb": "GB", "ua": "UA", "lt": "LT", "lv": "LV"}

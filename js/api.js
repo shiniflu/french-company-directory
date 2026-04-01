@@ -46,6 +46,19 @@ export async function searchCompaniesByCountry(country, query, page = 1, perPage
 }
 
 /**
+ * Get company detail by country and ID
+ */
+export async function getCompanyByCountry(country, companyId, signal) {
+  const response = await fetch(
+    "/api/company/" + country + "/" + encodeURIComponent(companyId),
+    { signal, headers: authHeaders() }
+  );
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Company not found");
+  return data;
+}
+
+/**
  * Search companies (France)
  * @param {Object} params - Search parameters
  * @param {AbortSignal} [signal] - AbortController signal

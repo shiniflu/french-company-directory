@@ -1,6 +1,6 @@
 import { createElement, useState, useEffect, useRef } from "react";
 import htm from "htm";
-import { getCompanyBySiren, searchCompaniesByCountry, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany, scrapeWebsiteForCfo, getCells, createCell, addCompaniesToCell } from "./api.js?v=18";
+import { getCompanyBySiren, searchCompaniesByCountry, getCompanyByCountry, enrichWithLusha, enrichWithKaspr, logActivity, getCfoContact, saveCfoContact, getFlaggedCompanies, flagCompany, unflagCompany, scrapeWebsiteForCfo, getCells, createCell, addCompaniesToCell } from "./api.js?v=18";
 import { formatSiren, formatSiret, formatCurrency, formatDate, getEmployeeLabel,
          getLegalFormLabel, getNafSectionLabel, getLatestFinance,
          CATEGORY_STYLES, exportToCSV, exportToJSON, isInternationalTrade } from "./utils.js?v=18";
@@ -1016,7 +1016,7 @@ export function CompanyPage({ siren, onNavigate, currentUser, country = "fr" }) 
 
     const fetchPromise = country === "fr"
       ? getCompanyBySiren(siren, controller.signal)
-      : searchCompaniesByCountry(country, siren, 1, 1, controller.signal).then(d => d.results && d.results[0] ? d.results[0] : null);
+      : getCompanyByCountry(country, siren, controller.signal);
 
     fetchPromise
       .then(data => {

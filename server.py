@@ -377,6 +377,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             return
         elif self.path.startswith("/api/search/"):
             self.handle_country_search()
+        elif self.path.startswith("/api/company/") and not self.path.startswith("/api/company-"):
+            self.handle_country_company_detail()
         elif self.path.startswith("/api/lusha"):
             self.handle_lusha()
         elif self.path.startswith("/api/cfo/"):
@@ -1877,6 +1879,275 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 self.send_json(400, {"error": f"Unknown country: {country}"})
 
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
+
+    # ── Company Detail by Country ────────────────────
+
+    def handle_country_company_detail(self):
+        """GET /api/company/<country>/<id> -> full company detail with directors"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+
+        parts = self.path.split("?")[0].split("/")
+        country = parts[3] if len(parts) > 3 else ""
+        company_id = parts[4] if len(parts) > 4 else ""
+
+        if not company_id:
+            self.send_json(400, {"error": "Company ID required"})
+            return
+
+        try:
+            if country == "no":
+                # Norway BRREG - direct lookup + directors
+                url = f"https://data.brreg.no/enhetsregisteret/api/enheter/{company_id}"
+                req = urllib.request.Request(url, headers={"Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    c = json.loads(resp.read().decode("utf-8"))
+                    org_num = str(c.get("organisasjonsnummer", ""))
+                    addr = c.get("forretningsadresse", c.get("postadresse", {}))
+                    nace = c.get("naeringskode1", {})
+                    directors = []
+                    try:
+                        rurl = f"https://data.brreg.no/enhetsregisteret/api/enheter/{org_num}/roller"
+                        rreq = urllib.request.Request(rurl, headers={"Accept": "application/json"})
+                        with urllib.request.urlopen(rreq, timeout=8) as rresp:
+                            rdata = json.loads(rresp.read().decode("utf-8"))
+                            for rg in rdata.get("rollegrupper", []):
+                                for r in rg.get("roller", []):
+                                    p = r.get("person", r.get("enhet", {}))
+                                    n = p.get("navn", {})
+                                    if isinstance(n, dict):
+                                        fname = n.get("fornavn", "")
+                                        lname = n.get("etternavn", "")
+                                    else:
+                                        fname = ""
+                                        lname = str(n)
+                                    if fname or lname:
+                                        directors.append({
+                                            "nom": lname, "prenoms": fname,
+                                            "qualite": r.get("type", {}).get("beskrivelse", ""),
+                                            "type_dirigeant": "personne physique"
+                                        })
+                    except Exception:
+                        pass
+                    result = {
+                        "nom_complet": c.get("navn", ""),
+                        "siren": org_num,
+                        "siege": {"libelle_commune": addr.get("kommune", addr.get("poststed", "")), "code_postal": addr.get("postnummer", ""), "adresse": " ".join(addr.get("adresse", []))},
+                        "categorie_entreprise": c.get("organisasjonsform", {}).get("beskrivelse", ""),
+                        "activite_principale": nace.get("kode", ""),
+                        "activite_description": nace.get("beskrivelse", ""),
+                        "dirigeants": directors,
+                        "nombre_etablissements": c.get("antallAnsatte", ""),
+                        "etat_administratif": "A",
+                        "date_creation": c.get("registreringsdatoEnhetsregisteret", ""),
+                        "website": c.get("hjemmeside", ""),
+                    }
+                    self.send_json(200, result)
+
+            elif country == "dk":
+                # Denmark CVR API - includes owners, phone, email
+                url = f"https://cvrapi.dk/api?vat={company_id}&country=dk"
+                req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "CompanyDir/1.0"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    c = json.loads(resp.read().decode("utf-8"))
+                    directors = []
+                    for o in c.get("owners", []):
+                        directors.append({
+                            "nom": o.get("name", ""), "prenoms": "",
+                            "qualite": "Owner", "type_dirigeant": "personne physique"
+                        })
+                    result = {
+                        "nom_complet": c.get("name", ""),
+                        "siren": str(c.get("vat", "")),
+                        "siege": {"libelle_commune": c.get("cityname", c.get("city", "")), "code_postal": str(c.get("zipcode", "")), "adresse": c.get("address", "")},
+                        "categorie_entreprise": "",
+                        "activite_principale": str(c.get("industrycode", "")),
+                        "activite_description": c.get("industrydesc", ""),
+                        "dirigeants": directors,
+                        "nombre_etablissements": c.get("employees", ""),
+                        "etat_administratif": "A" if not c.get("enddate") else "C",
+                        "date_creation": c.get("startdate", ""),
+                        "company_phone": c.get("phone", ""),
+                        "company_email": c.get("email", ""),
+                    }
+                    self.send_json(200, result)
+
+            elif country == "pl":
+                # Poland KRS - lookup by KRS number
+                krs_num = company_id.replace("-", "").strip()
+                if not krs_num.isdigit():
+                    self.send_json(404, {"error": "Invalid KRS number"})
+                    return
+                krs_num = krs_num.zfill(10)
+                url = f"https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/{krs_num}"
+                req = urllib.request.Request(url, headers={"Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    odpis = data.get("odpis", {})
+                    dane = odpis.get("dane", {})
+                    dz1 = dane.get("dzial1", {})
+                    dz2 = dane.get("dzial2", {})
+                    podmiot = dz1.get("danePodmiotu", {})
+                    adres = dz1.get("siedzibaIAdres", {}).get("adres", {})
+                    naglowek = odpis.get("naglowekA", {})
+                    directors = []
+                    # Board members
+                    rep = dz2.get("reprezentacja", {})
+                    for s in rep.get("sklad", []):
+                        fname = ""
+                        lname = ""
+                        if isinstance(s.get("imiona"), dict):
+                            fname = s["imiona"].get("imie", "")
+                        elif isinstance(s.get("imiona"), str):
+                            fname = s["imiona"]
+                        if isinstance(s.get("nazwisko"), dict):
+                            lname = s["nazwisko"].get("nazwiskoICzlon", "")
+                        elif isinstance(s.get("nazwisko"), str):
+                            lname = s["nazwisko"]
+                        directors.append({
+                            "nom": lname, "prenoms": fname,
+                            "qualite": s.get("funkcjaWOrganie", "Board Member"),
+                            "type_dirigeant": "personne physique"
+                        })
+                    # Supervisory board
+                    for org in dz2.get("organNadzoru", []):
+                        for s in org.get("sklad", []):
+                            fname = s.get("imiona", {}).get("imie", "") if isinstance(s.get("imiona"), dict) else str(s.get("imiona", ""))
+                            lname = s.get("nazwisko", {}).get("nazwiskoICzlon", "") if isinstance(s.get("nazwisko"), dict) else str(s.get("nazwisko", ""))
+                            directors.append({
+                                "nom": lname, "prenoms": fname,
+                                "qualite": "Supervisory Board",
+                                "type_dirigeant": "personne physique"
+                            })
+                    result = {
+                        "nom_complet": podmiot.get("nazwa", ""),
+                        "siren": naglowek.get("numerKRS", krs_num),
+                        "siege": {
+                            "libelle_commune": adres.get("miejscowosc", ""),
+                            "code_postal": adres.get("kodPocztowy", ""),
+                            "adresse": f"{adres.get('ulica', '')} {adres.get('nrDomu', '')}".strip(),
+                        },
+                        "categorie_entreprise": podmiot.get("formaPrawna", ""),
+                        "dirigeants": directors,
+                        "etat_administratif": "A",
+                        "date_creation": naglowek.get("dataRejestracjiWKRS", ""),
+                        "identifiers": {
+                            "krs": naglowek.get("numerKRS", ""),
+                            "regon": podmiot.get("identyfikatory", {}).get("regon", ""),
+                            "nip": podmiot.get("identyfikatory", {}).get("nip", ""),
+                        },
+                    }
+                    self.send_json(200, result)
+
+            elif country == "gb":
+                # UK - scrape Companies House web for company + officers
+                import ssl
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept": "text/html"}
+                # Get company page
+                url = f"https://find-and-update.company-information.service.gov.uk/company/{company_id}"
+                req = urllib.request.Request(url, headers=headers)
+                html_text = ""
+                try:
+                    with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+                        html_text = resp.read().decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                import html as html_mod
+                # Parse company info
+                name_m = re.search(r'id="company-name"[^>]*>(.*?)<', html_text, re.DOTALL)
+                company_name = html_mod.unescape(name_m.group(1).strip()) if name_m else company_id
+                pairs = re.findall(r'<dt[^>]*>(.*?)</dt>\s*<dd[^>]*>(.*?)</dd>', html_text, re.DOTALL)
+                info = {}
+                for dt, dd in pairs:
+                    key = html_mod.unescape(re.sub('<[^>]+>', '', dt).strip().lower())
+                    val = html_mod.unescape(re.sub('<[^>]+>', ' ', dd).strip())
+                    info[key] = val
+                # Get officers
+                directors = []
+                try:
+                    ourl = f"https://find-and-update.company-information.service.gov.uk/company/{company_id}/officers"
+                    oreq = urllib.request.Request(ourl, headers=headers)
+                    with urllib.request.urlopen(oreq, timeout=10, context=ctx) as oresp:
+                        ohtml = oresp.read().decode("utf-8", errors="replace")
+                        officers = re.findall(r'href="/officers/[^"]+/appointments"[^>]*>([^<]+)</a>.*?<dd[^>]*>\s*([^<]*)', ohtml, re.DOTALL)
+                        for oname, role in officers[:20]:
+                            oname = html_mod.unescape(oname.strip())
+                            role = html_mod.unescape(role.strip())
+                            parts_n = oname.split(",", 1)
+                            if len(parts_n) == 2:
+                                directors.append({"nom": parts_n[0].strip(), "prenoms": parts_n[1].strip(), "qualite": role or "Director", "type_dirigeant": "personne physique"})
+                            else:
+                                directors.append({"nom": oname, "prenoms": "", "qualite": role or "Director", "type_dirigeant": "personne physique"})
+                except Exception:
+                    pass
+                addr_text = info.get("registered office address", "")
+                addr_parts = [p.strip() for p in addr_text.split(",") if p.strip()]
+                city = addr_parts[-2] if len(addr_parts) >= 2 else ""
+                postcode = addr_parts[-1] if len(addr_parts) >= 1 else ""
+                result = {
+                    "nom_complet": company_name,
+                    "siren": company_id,
+                    "siege": {"libelle_commune": city, "code_postal": postcode, "adresse": addr_text},
+                    "categorie_entreprise": info.get("company type", ""),
+                    "dirigeants": directors,
+                    "etat_administratif": "A" if "active" in info.get("company status", "").lower() else "C",
+                    "date_creation": info.get("incorporated on", ""),
+                }
+                self.send_json(200, result)
+
+            elif country == "ee":
+                # Estonia - ariregister search by reg_code
+                url = f"https://ariregister.rik.ee/est/api/autocomplete?q={company_id}&lang=eng"
+                req = urllib.request.Request(url, headers={"Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    items = data.get("data", [])
+                    if items:
+                        c = items[0]
+                        result = {
+                            "nom_complet": c.get("name", ""),
+                            "siren": str(c.get("reg_code", "")),
+                            "siege": {"libelle_commune": "", "code_postal": c.get("zip_code", ""), "adresse": c.get("legal_address", "")},
+                            "categorie_entreprise": c.get("legal_form", ""),
+                            "dirigeants": [],
+                            "etat_administratif": "A" if c.get("status") == "R" else "C",
+                        }
+                        self.send_json(200, result)
+                    else:
+                        self.send_json(404, {"error": "Company not found"})
+
+            else:
+                # GLEIF fallback for other countries - lookup by LEI or search
+                gleif_url = f"https://api.gleif.org/api/v1/lei-records?filter%5Bfulltext%5D={urllib.parse.quote(company_id)}&page%5Bsize%5D=1"
+                req = urllib.request.Request(gleif_url, headers={"Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    records = data.get("data", [])
+                    if records:
+                        attrs = records[0].get("attributes", {})
+                        entity = attrs.get("entity", {})
+                        addr = entity.get("legalAddress", {})
+                        result = {
+                            "nom_complet": entity.get("legalName", {}).get("name", ""),
+                            "siren": entity.get("registeredAs", "") or attrs.get("lei", ""),
+                            "siege": {"libelle_commune": addr.get("city", ""), "code_postal": addr.get("postalCode", ""), "adresse": ", ".join(addr.get("addressLines", []))},
+                            "categorie_entreprise": entity.get("legalForm", {}).get("id", "") if entity.get("legalForm") else "",
+                            "dirigeants": [],
+                            "etat_administratif": "A" if entity.get("status") == "ACTIVE" else "C",
+                        }
+                        self.send_json(200, result)
+                    else:
+                        self.send_json(404, {"error": "Company not found"})
+
+        except urllib.error.HTTPError as e:
+            self.send_json(e.code, {"error": f"API error: {e.code}"})
         except Exception as e:
             self.send_json(500, {"error": str(e)})
 

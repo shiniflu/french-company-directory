@@ -213,6 +213,36 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
     setShowDeleted(false);
   };
 
+  // Send via Outlook (mailto: link)
+  const handleSendViaOutlook = () => {
+    // Collect all selected companies' emails
+    const selectedCompanies = companies.filter(([s]) => selected[s]);
+    const toEmails = [];
+    selectedCompanies.forEach(([s, c]) => {
+      const override = overrideEmails[s];
+      const ei = emailResults[s];
+      const email = override || (ei && ei.email ? ei.email : "");
+      if (email) toEmails.push(email);
+    });
+
+    if (toEmails.length === 0) {
+      alert("No emails found for selected companies. Use 'Find Email' first or enter emails manually in the composer.");
+      return;
+    }
+
+    // Use current composer content, or the last loaded draft
+    const subject = composerSubject || "";
+    const body = composerBody || "";
+
+    // Build mailto: URL — this opens Outlook/default mail client
+    const mailto = "mailto:" + toEmails.join(",")
+      + "?subject=" + encodeURIComponent(subject)
+      + "&body=" + encodeURIComponent(body);
+
+    // Open in new window — triggers Outlook
+    window.open(mailto, "_blank");
+  };
+
   // Find ALL emails for all companies in cell
   const handleFindAllEmails = async () => {
     const allComps = companies.map(([s, c]) => ({ siren: s, ...c }));
@@ -287,10 +317,10 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
             className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors border " + (showDraftList ? "bg-purple-100 text-purple-800 border-purple-300" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50")}>
             ${"📂"} Saved Drafts ${Object.keys(drafts).length > 0 ? "(" + Object.keys(drafts).length + ")" : ""}
           </button>
-          <button onClick=${() => alert("Send functionality will be added in the next step. For now, save your drafts.")}
+          <button onClick=${() => handleSendViaOutlook()}
             disabled=${selectedCount === 0}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50">
-            ${"📤"} Send Email
+            ${"📤"} Send via Outlook
           </button>
           <button onClick=${() => { setShowDeleted(!showDeleted); setShowDraftList(false); }}
             className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors border ml-auto " + (showDeleted ? "bg-red-50 text-red-700 border-red-300" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50")}>

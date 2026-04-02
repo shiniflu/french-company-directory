@@ -105,21 +105,22 @@ export const COUNTRIES = [
 ];
 
 export function CountrySelector({ selectedCountry, onSelectCountry }) {
+  const current = COUNTRIES.find(c => c.code === selectedCountry) || COUNTRIES[0];
   return html`
-    <div className="flex items-center justify-center gap-1 py-2 bg-gray-100 border-b border-gray-200">
-      ${COUNTRIES.filter(c => c.active).map(c => html`
-        <button key=${c.code}
-          onClick=${() => onSelectCountry(c.code)}
-          className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all " +
-            (selectedCountry === c.code
-              ? "bg-gov-blue text-white shadow-md"
-              : "bg-white text-gray-700 hover:bg-gray-200 border border-gray-300"
-            )}
-          title=${c.name}>
-          <span className="text-base">${c.flag}</span>
-          <span className="hidden sm:inline">${c.name}</span>
-        </button>
-      `)}
+    <div className="flex items-center justify-center py-2 bg-gray-100 border-b border-gray-200">
+      <div className="relative inline-block">
+        <select
+          value=${selectedCountry}
+          onChange=${(e) => onSelectCountry(e.target.value)}
+          className="appearance-none pl-10 pr-8 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer shadow-sm hover:border-gray-400 transition-colors min-w-[200px]"
+        >
+          ${COUNTRIES.filter(c => c.active).map(c => html`
+            <option key=${c.code} value=${c.code}>${c.flag} ${c.name}</option>
+          `)}
+        </select>
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg pointer-events-none">${current.flag}</span>
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-xs">${"\u25BC"}</span>
+      </div>
     </div>
   `;
 }

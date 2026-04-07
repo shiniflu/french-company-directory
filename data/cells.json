@@ -127,6 +127,21 @@
           "last_name": "DEMOURES",
           "role": "Administrateur",
           "source": "registry"
+        },
+        "email_result": {
+          "email": "contact@wimoov.fr",
+          "all_emails": [
+            "contact@wimoov.fr",
+            "info@wimoov.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "WIMOOV",
+          "source": "domain_pattern",
+          "director": {
+            "name": "OLIVIER DEMOURES",
+            "title": "Administrateur",
+            "is_cfo": false
+          }
         }
       },
       "819524752": {

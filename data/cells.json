@@ -19,7 +19,8 @@
           ],
           "type": "company_guess",
           "contact_name": "LA POSTE",
-          "source": "domain_pattern"
+          "source": "domain_pattern",
+          "director": null
         }
       },
       "412280737": {
@@ -240,6 +241,17 @@
           "last_name": "AJDARI",
           "role": "Administrateur",
           "source": "registry"
+        },
+        "email_result": {
+          "email": "contact@poste.fr",
+          "all_emails": [
+            "contact@poste.fr",
+            "info@poste.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "LA POSTE",
+          "source": "domain_pattern",
+          "director": null
         }
       }
     }

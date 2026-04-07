@@ -20,7 +20,11 @@
           "type": "company_guess",
           "contact_name": "LA POSTE",
           "source": "domain_pattern",
-          "director": null
+          "director": {
+            "name": "MARTIN AJDARI",
+            "title": "Administrateur",
+            "is_cfo": false
+          }
         }
       },
       "412280737": {
@@ -251,7 +255,11 @@
           "type": "company_guess",
           "contact_name": "LA POSTE",
           "source": "domain_pattern",
-          "director": null
+          "director": {
+            "name": "MARTIN AJDARI",
+            "title": "Administrateur",
+            "is_cfo": false
+          }
         }
       }
     }

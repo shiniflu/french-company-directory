@@ -159,7 +159,22 @@
         "commune": "BREST",
         "code_postal": "29200",
         "added_by": "admin",
-        "added_at": "2026-04-07T11:33:36.887793Z"
+        "added_at": "2026-04-07T11:33:36.887793Z",
+        "email_result": {
+          "email": "contact@tribord.fr",
+          "all_emails": [
+            "contact@tribord.fr",
+            "info@tribord.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "TRIBORD (TRIBORD)",
+          "source": "domain_pattern",
+          "director": {
+            "name": "RONAN LE GUEN",
+            "title": "Président de SAS",
+            "is_cfo": true
+          }
+        }
       }
     }
   }

@@ -135,7 +135,22 @@
         "commune": "PARIS",
         "code_postal": "75015",
         "added_by": "admin",
-        "added_at": "2026-04-07T11:33:34.930179Z"
+        "added_at": "2026-04-07T11:33:34.930179Z",
+        "email_result": {
+          "email": "contact@microstars.frdirecteur",
+          "all_emails": [
+            "contact@microstars.frdirecteur",
+            "contact@microstars.fr"
+          ],
+          "type": "company",
+          "contact_name": "MICROSTARS",
+          "source": "website (microstars.fr)",
+          "director": {
+            "name": "CEDRIC DESSAUX",
+            "title": "Commissaire aux comptes suppléant",
+            "is_cfo": false
+          }
+        }
       },
       "892330721": {
         "company_name": "JUST QUEEN",

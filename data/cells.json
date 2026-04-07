@@ -143,7 +143,18 @@
         "commune": "SEICHAMPS",
         "code_postal": "54280",
         "added_by": "admin",
-        "added_at": "2026-04-07T11:33:35.545760Z"
+        "added_at": "2026-04-07T11:33:35.545760Z",
+        "email_result": {
+          "email": "contact@just.fr",
+          "all_emails": [
+            "contact@just.fr",
+            "info@just.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "JUST QUEEN",
+          "source": "domain_pattern",
+          "director": null
+        }
       },
       "802947432": {
         "company_name": "ECO.DECHETS ENVIRONNEMENT",

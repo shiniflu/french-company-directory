@@ -12,5 +12,12 @@
     "role": "manager",
     "created_at": "2026-03-18T14:49:27.977255",
     "created_by": "admin"
+  },
+  "test": {
+    "password_hash": "1eb8f02a5a5e5ef1923a73ddfb023e5397dac2271ea1c6de0901c895554fd101",
+    "salt": "30aa0f60d783d989768002f0b05a4e76",
+    "role": "manager",
+    "created_at": "2026-04-08T08:02:29.821399",
+    "created_by": "admin"
   }
 }

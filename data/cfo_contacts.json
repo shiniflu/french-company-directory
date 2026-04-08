@@ -1,0 +1,33 @@
+{
+  "356000000": {
+    "firstName": "Benoit",
+    "lastName": "Masson",
+    "title": "CFO",
+    "phones": [
+      {
+        "number": "+33 1 71 08 84 28",
+        "phoneType": "direct",
+        "doNotCall": false,
+        "updateDate": "2026-03-16"
+      },
+      {
+        "number": "+33 6 23 53 19 28",
+        "phoneType": "mobile",
+        "doNotCall": false,
+        "updateDate": "2026-03-16"
+      }
+    ],
+    "emails": [
+      {
+        "email": "benoit.masson@laposte.fr",
+        "emailType": "work",
+        "emailConfidence": "A+"
+      }
+    ],
+    "linkedin": "",
+    "source": "lusha",
+    "found_by": "admin",
+    "found_at": "2026-04-08T07:32:42.093775",
+    "company_name": "LA POSTE"
+  }
+}

@@ -55,7 +55,7 @@ DRAFTS_FILE = os.path.join(DATA_DIR, "drafts.json")
 # ── GitHub-backed persistent storage ─────────────────
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO = "shiniflu/french-company-directory"
-GITHUB_SYNC_FILES = ["cells.json", "flagged_companies.json", "cfo_contacts.json", "drafts.json"]
+GITHUB_SYNC_FILES = ["cells.json", "flagged_companies.json", "cfo_contacts.json", "drafts.json", "users.json"]
 
 def _github_get_file(filepath):
     """Get file content and SHA from GitHub repo."""
@@ -195,10 +195,11 @@ def load_users():
         return json.load(f)
 
 def save_users(users):
-    """Save users to JSON file."""
+    """Save users to JSON file + sync to GitHub."""
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(USERS_FILE, "w", encoding="utf-8") as f:
         json.dump(users, f, indent=2, ensure_ascii=False)
+    github_sync_save("users.json", users)
 
 def load_cfo_contacts():
     """Load CFO contacts — from local file (GitHub-synced on startup)."""

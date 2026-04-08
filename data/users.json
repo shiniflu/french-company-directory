@@ -26,5 +26,12 @@
     "role": "manager",
     "created_at": "2026-04-08T08:05:16.641966",
     "created_by": "admin"
+  },
+  "killian": {
+    "password_hash": "55492775fa9447d656166b73f8cd33af6e69334a4965a239f2ffef4fa0846e8b",
+    "salt": "db5389f016ceb1a6eecf078633878bf6",
+    "role": "admin",
+    "created_at": "2026-04-08T08:19:32.941748",
+    "created_by": "admin"
   }
 }

@@ -55,7 +55,8 @@ DRAFTS_FILE = os.path.join(DATA_DIR, "drafts.json")
 # ── GitHub-backed persistent storage ─────────────────
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO = "shiniflu/french-company-directory"
-GITHUB_SYNC_FILES = ["cells.json", "flagged_companies.json", "cfo_contacts.json", "drafts.json", "users.json"]
+GITHUB_SYNC_FILES = ["cells.json", "flagged_companies.json", "cfo_contacts.json", "drafts.json", "users.json", "email_stats.json"]
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 
 def _github_get_file(filepath):
     """Get file content and SHA from GitHub repo."""
@@ -400,6 +401,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_admin_stats()
         elif self.path.startswith("/api/drafts"):
             self.handle_get_drafts()
+        elif self.path == "/api/email-stats":
+            self.handle_get_email_stats()
         else:
             super().do_GET()
 
@@ -428,6 +431,8 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_log_activity()
         elif self.path == "/api/drafts":
             self.handle_save_draft()
+        elif self.path == "/api/send-email":
+            self.handle_send_email()
         else:
             self.send_error(404)
 
@@ -1372,6 +1377,129 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
 
         except Exception as e:
             self.send_json(500, {"error": str(e)})
+
+    # ── Email Sending via Resend ──────────────────────
+
+    def handle_send_email(self):
+        """POST /api/send-email { to, subject, body, from_name } -> send via Resend API"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+
+        if not RESEND_API_KEY:
+            self.send_json(500, {"error": "RESEND_API_KEY not configured on server"})
+            return
+
+        try:
+            body = self.read_body()
+            to_emails = body.get("to", [])
+            subject = body.get("subject", "")
+            html_body = body.get("body", "").replace("\n", "<br>")
+            from_name = body.get("from_name", "Montelux Sales")
+            from_email = body.get("from_email", "sales@montelux.com")
+
+            if not to_emails or not subject:
+                self.send_json(400, {"error": "to and subject are required"})
+                return
+
+            if isinstance(to_emails, str):
+                to_emails = [e.strip() for e in to_emails.split(",") if e.strip()]
+
+            # Send via Resend API
+            results = []
+            for to_email in to_emails:
+                try:
+                    resend_body = json.dumps({
+                        "from": f"{from_name} <{from_email}>",
+                        "to": [to_email],
+                        "subject": subject,
+                        "html": f"<div style='font-family: Arial, sans-serif; font-size: 14px;'>{html_body}</div>",
+                    }).encode("utf-8")
+
+                    req = urllib.request.Request(
+                        "https://api.resend.com/emails",
+                        data=resend_body,
+                        headers={
+                            "Authorization": f"Bearer {RESEND_API_KEY}",
+                            "Content-Type": "application/json",
+                        },
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        result = json.loads(resp.read().decode("utf-8"))
+                        results.append({"to": to_email, "id": result.get("id", ""), "status": "sent"})
+                except urllib.error.HTTPError as e:
+                    error_body = e.read().decode("utf-8")
+                    try:
+                        error_data = json.loads(error_body)
+                        results.append({"to": to_email, "status": "failed", "error": error_data.get("message", str(e))})
+                    except Exception:
+                        results.append({"to": to_email, "status": "failed", "error": str(e)})
+                except Exception as e:
+                    results.append({"to": to_email, "status": "failed", "error": str(e)})
+
+            # Save email stats
+            self._save_email_stat(auth_user["username"], subject, to_emails, results)
+            log_activity(auth_user["username"], "send_email", f"{subject} -> {', '.join(to_emails)}")
+
+            sent = sum(1 for r in results if r["status"] == "sent")
+            failed = sum(1 for r in results if r["status"] == "failed")
+            self.send_json(200, {
+                "ok": True,
+                "sent": sent,
+                "failed": failed,
+                "results": results,
+            })
+
+        except Exception as e:
+            self.send_json(500, {"error": str(e)})
+
+    def _save_email_stat(self, username, subject, to_emails, results):
+        """Save email sending statistics."""
+        stats_file = os.path.join(DATA_DIR, "email_stats.json")
+        stats = {}
+        if os.path.exists(stats_file):
+            with open(stats_file, "r", encoding="utf-8") as f:
+                stats = json.load(f)
+        if "emails" not in stats:
+            stats["emails"] = []
+        stats["emails"].append({
+            "sent_by": username,
+            "sent_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "subject": subject,
+            "recipients": to_emails,
+            "results": results,
+            "total_sent": sum(1 for r in results if r["status"] == "sent"),
+            "total_failed": sum(1 for r in results if r["status"] == "failed"),
+        })
+        # Keep last 1000 entries
+        stats["emails"] = stats["emails"][-1000:]
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(stats_file, "w", encoding="utf-8") as f:
+            json.dump(stats, f, indent=2, ensure_ascii=False)
+        github_sync_save("email_stats.json", stats)
+
+    def handle_get_email_stats(self):
+        """GET /api/email-stats -> email sending statistics"""
+        auth_user = get_auth_user(self)
+        if not auth_user:
+            self.send_json(401, {"error": "Not authenticated"})
+            return
+        stats_file = os.path.join(DATA_DIR, "email_stats.json")
+        stats = {}
+        if os.path.exists(stats_file):
+            with open(stats_file, "r", encoding="utf-8") as f:
+                stats = json.load(f)
+        emails = stats.get("emails", [])
+        total_sent = sum(e.get("total_sent", 0) for e in emails)
+        total_failed = sum(e.get("total_failed", 0) for e in emails)
+        self.send_json(200, {
+            "total_emails_sent": total_sent,
+            "total_failed": total_failed,
+            "total_campaigns": len(emails),
+            "recent": emails[-20:],
+        })
 
     # ── Activity logging endpoint ─────────────────────
 

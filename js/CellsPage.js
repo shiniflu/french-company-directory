@@ -1,6 +1,6 @@
 import { createElement, useState, useEffect } from "react";
 import htm from "htm";
-import { getCells, getCellDetail, deleteCell, removeCompanyFromCell, findCompanyEmail, getDraftsData, saveDraft, deleteDraft, restoreDraft, permanentDeleteDraft } from "./api.js?v=18";
+import { getCells, getCellDetail, deleteCell, removeCompanyFromCell, findCompanyEmail, getDraftsData, saveDraft, deleteDraft, restoreDraft, permanentDeleteDraft, sendEmail } from "./api.js?v=18";
 import { formatSiren, CATEGORY_STYLES } from "./utils.js?v=18";
 import { LoadingSpinner, ErrorMessage, Badge, EmptyState } from "./components.js?v=18";
 
@@ -213,6 +213,42 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
     setShowDeleted(false);
   };
 
+  // Send via Resend API (actual email delivery with stats)
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState(null);
+
+  const handleSendViaResend = async () => {
+    const selectedCompanies = companies.filter(([s]) => selected[s]);
+    const toEmails = [];
+    selectedCompanies.forEach(([s, c]) => {
+      const override = overrideEmails[s];
+      const ei = emailResults[s];
+      const email = override || (ei && ei.email ? ei.email : "");
+      if (email) toEmails.push(email);
+    });
+    if (toEmails.length === 0) {
+      alert("No emails found. Use 'Find Email' first.");
+      return;
+    }
+    const subject = composerSubject || "";
+    const body = composerBody || "";
+    if (!subject) { alert("Please write a subject first (New Email or load a draft)."); return; }
+
+    if (!confirm("Send email to " + toEmails.length + " recipient(s)?\n\n" + toEmails.join("\n") + "\n\nSubject: " + subject)) return;
+
+    setSending(true);
+    setSendResult(null);
+    try {
+      const result = await sendEmail(toEmails, subject, body);
+      setSendResult(result);
+      setTimeout(() => setSendResult(null), 10000);
+    } catch (e) {
+      setSendResult({ error: e.message });
+      setTimeout(() => setSendResult(null), 10000);
+    }
+    setSending(false);
+  };
+
   // Send via Outlook (mailto: link)
   const handleSendViaOutlook = () => {
     // Collect all selected companies' emails
@@ -317,11 +353,21 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
             className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors border " + (showDraftList ? "bg-purple-100 text-purple-800 border-purple-300" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50")}>
             ${"📂"} Saved Drafts ${Object.keys(drafts).length > 0 ? "(" + Object.keys(drafts).length + ")" : ""}
           </button>
+          <button onClick=${handleSendViaResend}
+            disabled=${selectedCount === 0 || sending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50">
+            ${sending ? "Sending..." : "📤 Send Email"}
+          </button>
           <button onClick=${() => handleSendViaOutlook()}
             disabled=${selectedCount === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50">
-            ${"📤"} Send via Outlook
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-600 text-white text-xs font-medium rounded-md hover:bg-gray-700 transition-colors disabled:opacity-50">
+            ${"📧"} Outlook
           </button>
+          ${sendResult && html`
+            <span className=${"text-xs font-medium " + (sendResult.error ? "text-red-600" : "text-green-600")}>
+              ${sendResult.error ? "✗ " + sendResult.error : "✓ Sent " + sendResult.sent + " email(s)" + (sendResult.failed ? ", " + sendResult.failed + " failed" : "")}
+            </span>
+          `}
           <button onClick=${() => { setShowDeleted(!showDeleted); setShowDraftList(false); }}
             className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors border ml-auto " + (showDeleted ? "bg-red-50 text-red-700 border-red-300" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50")}>
             ${"🗑️"} Deleted ${Object.keys(deletedDrafts).length > 0 ? "(" + Object.keys(deletedDrafts).length + ")" : ""}

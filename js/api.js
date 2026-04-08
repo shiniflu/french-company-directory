@@ -304,6 +304,27 @@ export async function scrapeWebsiteForCfo(website, companyName, signal) {
   return data;
 }
 
+// ── Email Sending (Resend) ──────────────────────────
+
+export async function sendEmail(to, subject, body, fromName, signal) {
+  const response = await fetch("/api/send-email", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ to, subject, body, from_name: fromName || "Montelux Sales" }),
+    signal,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to send email");
+  return data;
+}
+
+export async function getEmailStats(signal) {
+  const response = await fetch("/api/email-stats", { signal, headers: authHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Failed to fetch stats");
+  return data;
+}
+
 // ── Email Drafts ────────────────────────────────────
 
 export async function getDraftsData(cellId, signal) {

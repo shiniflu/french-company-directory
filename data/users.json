@@ -19,5 +19,12 @@
     "role": "manager",
     "created_at": "2026-04-08T08:02:29.821399",
     "created_by": "admin"
+  },
+  "artur": {
+    "password_hash": "1692d3861adfb9fc42ba5d358cd6a7eebdac1fd92b29a43196077a5145878105",
+    "salt": "ffe4871f8f71095379874fc4087bae06",
+    "role": "manager",
+    "created_at": "2026-04-08T08:05:16.641966",
+    "created_by": "admin"
   }
 }

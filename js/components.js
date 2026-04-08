@@ -102,6 +102,8 @@ export const COUNTRIES = [
   { code: "be", flag: "\uD83C\uDDE7\uD83C\uDDEA", name: "Belgium", active: true },
   { code: "ie", flag: "\uD83C\uDDEE\uD83C\uDDEA", name: "Ireland", active: true },
   { code: "ua", flag: "\uD83C\uDDFA\uD83C\uDDE6", name: "Ukraine", active: true },
+  { code: "ae", flag: "\uD83C\uDDE6\uD83C\uDDEA", name: "UAE", active: true },
+  { code: "cy", flag: "\uD83C\uDDE8\uD83C\uDDFE", name: "Cyprus", active: true },
 ];
 
 export function CountrySelector({ selectedCountry, onSelectCountry }) {

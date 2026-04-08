@@ -1834,9 +1834,9 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception as e:
                     self.send_json(200, {"results": [], "total_results": 0, "note": f"Finland error: {str(e)}"})
 
-            elif country in ("us", "gb", "ua", "lt", "lv", "sk", "be", "ie"):
+            elif country in ("us", "gb", "ua", "lt", "lv", "sk", "be", "ie", "ae", "cy"):
                 # GLEIF API - free global company search (Legal Entity Identifier)
-                country_codes = {"us": "US", "gb": "GB", "ua": "UA", "lt": "LT", "lv": "LV", "sk": "SK", "be": "BE", "ie": "IE"}
+                country_codes = {"us": "US", "gb": "GB", "ua": "UA", "lt": "LT", "lv": "LV", "sk": "SK", "be": "BE", "ie": "IE", "ae": "AE", "cy": "CY"}
                 cc = country_codes.get(country, "")
                 # If query is generic/default, browse all companies in that country
                 browse_defaults = {"bank", "company", "inc", "limited", "vodafone", "naftogaz", "maxima", "llc", "ltd"}

@@ -306,11 +306,11 @@ export async function scrapeWebsiteForCfo(website, companyName, signal) {
 
 // ── Email Sending (Resend) ──────────────────────────
 
-export async function sendEmail(to, subject, body, fromName, signal) {
+export async function sendEmail(to, subject, body, fromName, mode, signal) {
   const response = await fetch("/api/send-email", {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ to, subject, body, from_name: fromName || "Montelux Sales" }),
+    body: JSON.stringify({ to, subject, body, from_name: fromName || "Montelux Sales", mode: mode || "log" }),
     signal,
   });
   const data = await response.json();

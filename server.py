@@ -1391,7 +1391,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
     # ── Email Sending via Resend ──────────────────────
 
     def handle_send_email(self):
-        """POST /api/send-email { to, subject, body, from_name } -> log email stats only"""
+        """POST /api/send-email { to, subject, body, from_name, mode } -> send via Resend or log only"""
         auth_user = get_auth_user(self)
         if not auth_user:
             self.send_json(401, {"error": "Not authenticated"})
@@ -1401,13 +1401,46 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             body = self.read_body()
             to_emails = body.get("to", [])
             subject = body.get("subject", "")
-            from_name = body.get("from_name", "Outlook")
+            email_body = body.get("body", "")
+            from_name = body.get("from_name", "Montelux Sales")
+            mode = body.get("mode", "log")  # "send" = Resend, "log" = just log
 
             if isinstance(to_emails, str):
                 to_emails = [e.strip() for e in to_emails.split(",") if e.strip()]
 
-            # Just log — no actual sending, Outlook handles delivery
-            results = [{"to": e, "status": "logged"} for e in to_emails]
+            results = []
+
+            if mode == "send" and RESEND_API_KEY:
+                # Actually send via Resend API
+                html_body = email_body.replace("\n", "<br>")
+                for to_email in to_emails:
+                    try:
+                        resend_data = json.dumps({
+                            "from": f"{from_name} <noreply@sales.montelux.org>",
+                            "to": [to_email],
+                            "subject": subject,
+                            "html": f"<div style='font-family:Arial,sans-serif;font-size:14px;'>{html_body}</div>",
+                        }).encode("utf-8")
+                        req = urllib.request.Request(
+                            "https://api.resend.com/emails",
+                            data=resend_data,
+                            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+                            method="POST",
+                        )
+                        with urllib.request.urlopen(req, timeout=15) as resp:
+                            r = json.loads(resp.read().decode("utf-8"))
+                            results.append({"to": to_email, "id": r.get("id", ""), "status": "sent"})
+                    except urllib.error.HTTPError as e:
+                        try:
+                            err = json.loads(e.read().decode("utf-8"))
+                            results.append({"to": to_email, "status": "failed", "error": err.get("message", str(e))})
+                        except Exception:
+                            results.append({"to": to_email, "status": "failed", "error": str(e)})
+                    except Exception as e:
+                        results.append({"to": to_email, "status": "failed", "error": str(e)})
+            else:
+                # Just log (Outlook mode)
+                results = [{"to": e, "status": "logged"} for e in to_emails]
 
             # Save email stats
             self._save_email_stat(auth_user["username"], subject, to_emails, results)

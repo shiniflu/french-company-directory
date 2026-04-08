@@ -234,12 +234,12 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
     const body = composerBody || "";
     if (!subject) { alert("Please write a subject first (New Email or load a draft)."); return; }
 
-    if (!confirm("Send email to " + toEmails.length + " recipient(s)?\n\n" + toEmails.join("\n") + "\n\nSubject: " + subject)) return;
+    if (!confirm("Send email via Resend to " + toEmails.length + " recipient(s)?\n\nFrom: noreply@sales.montelux.org\n\n" + toEmails.join("\n") + "\n\nSubject: " + subject)) return;
 
     setSending(true);
     setSendResult(null);
     try {
-      const result = await sendEmail(toEmails, subject, body);
+      const result = await sendEmail(toEmails, subject, body, "Montelux Sales", "send");
       setSendResult(result);
       setTimeout(() => setSendResult(null), 10000);
     } catch (e) {
@@ -356,11 +356,21 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
             className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors border " + (showDraftList ? "bg-purple-100 text-purple-800 border-purple-300" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50")}>
             ${"📂"} Saved Drafts ${Object.keys(drafts).length > 0 ? "(" + Object.keys(drafts).length + ")" : ""}
           </button>
+          <button onClick=${handleSendViaResend}
+            disabled=${selectedCount === 0 || sending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50">
+            ${sending ? "Sending..." : "📤 Send Email"}
+          </button>
           <button onClick=${() => handleSendViaOutlook()}
             disabled=${selectedCount === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50">
-            ${"📤"} Send via Outlook
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-500 text-white text-xs font-medium rounded-md hover:bg-gray-600 transition-colors disabled:opacity-50">
+            ${"📧"} Outlook
           </button>
+          ${sendResult && html`
+            <span className=${"text-xs font-medium " + (sendResult.error ? "text-red-600" : "text-green-600")}>
+              ${sendResult.error ? "✗ " + sendResult.error : "✓ Sent " + (sendResult.sent || 0) + " email(s)"}
+            </span>
+          `}
           <button onClick=${() => { setShowDeleted(!showDeleted); setShowDraftList(false); }}
             className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors border ml-auto " + (showDeleted ? "bg-red-50 text-red-700 border-red-300" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50")}>
             ${"🗑️"} Deleted ${Object.keys(deletedDrafts).length > 0 ? "(" + Object.keys(deletedDrafts).length + ")" : ""}

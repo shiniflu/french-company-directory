@@ -588,11 +588,34 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                       </div>
 
                       ${emailInfo && emailInfo.director && html`
-                        <div className="mt-1 flex items-center gap-2 text-xs">
+                        <div className="mt-1 flex items-center gap-2 text-xs flex-wrap">
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
                             ${"👤"} ${emailInfo.director.name}
                             <span className="text-sky-500">— ${emailInfo.director.title}</span>
                           </span>
+                        </div>
+                      `}
+                      ${emailInfo && emailInfo.director_contact && html`
+                        <div className="mt-1 flex items-center gap-2 text-xs flex-wrap">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
+                            LUSHA
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200">
+                            ${"👤"} ${emailInfo.director_contact.name}
+                            <span className="text-indigo-500">— ${emailInfo.director_contact.title}</span>
+                          </span>
+                          ${emailInfo.director_contact.email && html`
+                            <a href=${"mailto:" + emailInfo.director_contact.email}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
+                              ${"📧"} ${emailInfo.director_contact.email}
+                            </a>
+                          `}
+                          ${emailInfo.director_contact.phone && html`
+                            <a href=${"tel:" + emailInfo.director_contact.phone}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 font-mono">
+                              ${"📱"} ${emailInfo.director_contact.phone}
+                            </a>
+                          `}
                         </div>
                       `}
                       ${expandedEmail[siren] && emailInfo && emailInfo.email && html`

@@ -946,47 +946,57 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                         break
 
             if best_emails:
-                # Prioritize: contact@ > info@ > direction@ > finance@ > others
                 priority_prefixes = ["contact", "info", "direction", "finance", "daf",
                                      "comptabilite", "accueil", "commercial", "service"]
                 best_emails.sort(key=lambda e: next(
                     (i for i, p in enumerate(priority_prefixes) if e.startswith(p + "@")),
                     len(priority_prefixes)
                 ))
-                result = {
-                    "email": best_emails[0],
-                    "all_emails": best_emails[:5],
-                    "type": "company",
-                    "contact_name": company_name,
-                    "source": f"website ({found_domain})",
-                    "director": first_director,
-                }
-                self._save_email_to_cell(siren, result)
-                self.send_json(200, result)
-                return
 
-            # ── Level 3: Try Lusha API for directors (reuse pre-fetched list) ──
+            # ── Level 3: ALWAYS try Lusha for director personal email ──
             LUSHA_API_KEY = "939a946a-f6d8-4617-b020-6b08535ea8f3"
             lusha_headers = {"api_key": LUSHA_API_KEY, "Accept": "application/json"}
+            director_contact = None
             for d_info in all_dirs[:2]:
                 try:
                     lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(d_info['first'])}&lastName={urllib.parse.quote(d_info['last'])}&company={urllib.parse.quote(company_name)}"
                     lusha_req = urllib.request.Request(lusha_url, headers=lusha_headers)
                     with urllib.request.urlopen(lusha_req, timeout=10, context=ssl_ctx) as lusha_resp:
                         lusha_data = json.loads(lusha_resp.read().decode("utf-8"))
-                        emails = lusha_data.get("emailAddresses") or lusha_data.get("emails") or []
-                        if emails:
-                            email = emails[0].get("email") or emails[0].get("value") or ""
-                            if email:
-                                ct = "cfo" if d_info["is_cfo"] else "director"
-                                result = {"email": email, "type": ct,
-                                          "contact_name": f"{d_info['name']} ({d_info['title']})", "source": "lusha",
-                                          "director": first_director}
-                                self._save_email_to_cell(siren, result)
-                                self.send_json(200, result)
-                                return
+                        l_emails = lusha_data.get("emailAddresses") or lusha_data.get("emails") or []
+                        l_phones = lusha_data.get("phoneNumbers") or lusha_data.get("phones") or []
+                        if l_emails or l_phones:
+                            d_email = ""
+                            if l_emails:
+                                d_email = l_emails[0].get("email") or l_emails[0].get("value") or ""
+                            d_phone = ""
+                            if l_phones:
+                                d_phone = l_phones[0].get("number") or l_phones[0].get("internationalNumber") or l_phones[0].get("localNumber") or ""
+                            director_contact = {
+                                "name": d_info["name"],
+                                "title": d_info["title"],
+                                "email": d_email,
+                                "phone": d_phone,
+                                "source": "lusha",
+                            }
+                            break
                 except Exception:
                     continue
+
+            # Build final result with ALL collected data
+            if best_emails or director_contact:
+                result = {
+                    "email": best_emails[0] if best_emails else (director_contact["email"] if director_contact else ""),
+                    "all_emails": best_emails[:5] if best_emails else [],
+                    "type": "director" if (director_contact and director_contact.get("email")) else ("company" if best_emails else "none"),
+                    "contact_name": company_name,
+                    "source": f"website ({found_domain})" if best_emails else "lusha",
+                    "director": first_director,
+                    "director_contact": director_contact,
+                }
+                self._save_email_to_cell(siren, result)
+                self.send_json(200, result)
+                return
 
             # ── Level 4: Build email from domain pattern + director name ──
             if not found_domain and domains:

@@ -1381,63 +1381,23 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
     # ── Email Sending via Resend ──────────────────────
 
     def handle_send_email(self):
-        """POST /api/send-email { to, subject, body, from_name } -> send via Resend API"""
+        """POST /api/send-email { to, subject, body, from_name } -> log email stats only"""
         auth_user = get_auth_user(self)
         if not auth_user:
             self.send_json(401, {"error": "Not authenticated"})
-            return
-
-        if not RESEND_API_KEY:
-            self.send_json(500, {"error": "RESEND_API_KEY not configured on server"})
             return
 
         try:
             body = self.read_body()
             to_emails = body.get("to", [])
             subject = body.get("subject", "")
-            html_body = body.get("body", "").replace("\n", "<br>")
-            from_name = body.get("from_name", "Montelux Sales")
-            from_email = body.get("from_email", "sales@montelux.com")
-
-            if not to_emails or not subject:
-                self.send_json(400, {"error": "to and subject are required"})
-                return
+            from_name = body.get("from_name", "Outlook")
 
             if isinstance(to_emails, str):
                 to_emails = [e.strip() for e in to_emails.split(",") if e.strip()]
 
-            # Send via Resend API
-            results = []
-            for to_email in to_emails:
-                try:
-                    resend_body = json.dumps({
-                        "from": f"{from_name} <{from_email}>",
-                        "to": [to_email],
-                        "subject": subject,
-                        "html": f"<div style='font-family: Arial, sans-serif; font-size: 14px;'>{html_body}</div>",
-                    }).encode("utf-8")
-
-                    req = urllib.request.Request(
-                        "https://api.resend.com/emails",
-                        data=resend_body,
-                        headers={
-                            "Authorization": f"Bearer {RESEND_API_KEY}",
-                            "Content-Type": "application/json",
-                        },
-                        method="POST",
-                    )
-                    with urllib.request.urlopen(req, timeout=10) as resp:
-                        result = json.loads(resp.read().decode("utf-8"))
-                        results.append({"to": to_email, "id": result.get("id", ""), "status": "sent"})
-                except urllib.error.HTTPError as e:
-                    error_body = e.read().decode("utf-8")
-                    try:
-                        error_data = json.loads(error_body)
-                        results.append({"to": to_email, "status": "failed", "error": error_data.get("message", str(e))})
-                    except Exception:
-                        results.append({"to": to_email, "status": "failed", "error": str(e)})
-                except Exception as e:
-                    results.append({"to": to_email, "status": "failed", "error": str(e)})
+            # Just log — no actual sending, Outlook handles delivery
+            results = [{"to": e, "status": "logged"} for e in to_emails]
 
             # Save email stats
             self._save_email_stat(auth_user["username"], subject, to_emails, results)

@@ -249,33 +249,36 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
     setSending(false);
   };
 
-  // Send via Outlook (mailto: link)
+  // Send via Outlook (mailto: link) + log stats
   const handleSendViaOutlook = () => {
-    // Collect all selected companies' emails
     const selectedCompanies = companies.filter(([s]) => selected[s]);
     const toEmails = [];
+    const companyNames = [];
     selectedCompanies.forEach(([s, c]) => {
       const override = overrideEmails[s];
       const ei = emailResults[s];
       const email = override || (ei && ei.email ? ei.email : "");
-      if (email) toEmails.push(email);
+      if (email) {
+        toEmails.push(email);
+        companyNames.push(c.company_name || s);
+      }
     });
 
     if (toEmails.length === 0) {
-      alert("No emails found for selected companies. Use 'Find Email' first or enter emails manually in the composer.");
+      alert("No emails found. Use 'Find Email' first or enter emails manually.");
       return;
     }
 
-    // Use current composer content, or the last loaded draft
     const subject = composerSubject || "";
     const body = composerBody || "";
 
-    // Build mailto: URL — this opens Outlook/default mail client
+    // Log stats to server (fire-and-forget)
+    sendEmail(toEmails, subject, "(sent via Outlook)", "Outlook").catch(() => {});
+
+    // Open Outlook
     const mailto = "mailto:" + toEmails.join(",")
       + "?subject=" + encodeURIComponent(subject)
       + "&body=" + encodeURIComponent(body);
-
-    // Open in new window — triggers Outlook
     window.open(mailto, "_blank");
   };
 
@@ -353,21 +356,11 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
             className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors border " + (showDraftList ? "bg-purple-100 text-purple-800 border-purple-300" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50")}>
             ${"📂"} Saved Drafts ${Object.keys(drafts).length > 0 ? "(" + Object.keys(drafts).length + ")" : ""}
           </button>
-          <button onClick=${handleSendViaResend}
-            disabled=${selectedCount === 0 || sending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50">
-            ${sending ? "Sending..." : "📤 Send Email"}
-          </button>
           <button onClick=${() => handleSendViaOutlook()}
             disabled=${selectedCount === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-600 text-white text-xs font-medium rounded-md hover:bg-gray-700 transition-colors disabled:opacity-50">
-            ${"📧"} Outlook
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50">
+            ${"📤"} Send via Outlook
           </button>
-          ${sendResult && html`
-            <span className=${"text-xs font-medium " + (sendResult.error ? "text-red-600" : "text-green-600")}>
-              ${sendResult.error ? "✗ " + sendResult.error : "✓ Sent " + sendResult.sent + " email(s)" + (sendResult.failed ? ", " + sendResult.failed + " failed" : "")}
-            </span>
-          `}
           <button onClick=${() => { setShowDeleted(!showDeleted); setShowDraftList(false); }}
             className=${"inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors border ml-auto " + (showDeleted ? "bg-red-50 text-red-700 border-red-300" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50")}>
             ${"🗑️"} Deleted ${Object.keys(deletedDrafts).length > 0 ? "(" + Object.keys(deletedDrafts).length + ")" : ""}

@@ -50,6 +50,23 @@
       ],
       "total_sent": 0,
       "total_failed": 1
+    },
+    {
+      "sent_by": "admin",
+      "sent_at": "2026-04-09T07:52:11.540089+00:00",
+      "subject": "Test Montelux",
+      "recipients": [
+        "n.bagay2005@gmail.com"
+      ],
+      "results": [
+        {
+          "to": "n.bagay2005@gmail.com",
+          "id": "1a79ba30-f826-4933-a985-82af615fac12",
+          "status": "sent"
+        }
+      ],
+      "total_sent": 1,
+      "total_failed": 0
     }
   ]
 }

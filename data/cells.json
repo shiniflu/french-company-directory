@@ -193,7 +193,11 @@
           "type": "company_guess",
           "contact_name": "ELECTRICITE DE FRANCE (EDF)",
           "source": "domain_pattern",
-          "director": null
+          "director": {
+            "name": "LUC REMONT",
+            "title": "Président du conseil d'administration et directeur général",
+            "is_cfo": true
+          }
         }
       },
       "662025196": {

@@ -33,6 +33,23 @@
       ],
       "total_sent": 0,
       "total_failed": 1
+    },
+    {
+      "sent_by": "admin",
+      "sent_at": "2026-04-09T07:48:57.261847+00:00",
+      "subject": "Test from Montelux Sales",
+      "recipients": [
+        "n.bagay2005@gmail.com"
+      ],
+      "results": [
+        {
+          "to": "n.bagay2005@gmail.com",
+          "status": "failed",
+          "error": "HTTP Error 403: Forbidden"
+        }
+      ],
+      "total_sent": 0,
+      "total_failed": 1
     }
   ]
 }

@@ -277,7 +277,11 @@
           "type": "company_guess",
           "contact_name": "ORANGE",
           "source": "domain_pattern",
-          "director": null
+          "director": {
+            "name": "JACQUES ASCHENBROICH",
+            "title": "Président du conseil d'administration",
+            "is_cfo": true
+          }
         }
       }
     }

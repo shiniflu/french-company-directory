@@ -959,7 +959,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             director_contact = None
             for d_info in all_dirs[:2]:
                 try:
-                    lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(d_info['first'])}&lastName={urllib.parse.quote(d_info['last'])}&company={urllib.parse.quote(company_name)}"
+                    lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(d_info['first'])}&lastName={urllib.parse.quote(d_info['last'])}&companyName={urllib.parse.quote(company_name)}"
                     lusha_req = urllib.request.Request(lusha_url, headers=lusha_headers)
                     with urllib.request.urlopen(lusha_req, timeout=10, context=ssl_ctx) as lusha_resp:
                         lusha_data = json.loads(lusha_resp.read().decode("utf-8"))
@@ -1217,7 +1217,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                                         }
                                         # Try Lusha for this director's email/phone
                                         try:
-                                            lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(first)}&lastName={urllib.parse.quote(nom)}&company={urllib.parse.quote(comp.get('company_name', ''))}"
+                                            lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(first)}&lastName={urllib.parse.quote(nom)}&companyName={urllib.parse.quote(comp.get('company_name', ''))}"
                                             lusha_req = urllib.request.Request(lusha_url, headers={"api_key": LUSHA_API_KEY, "Accept": "application/json"})
                                             with urllib.request.urlopen(lusha_req, timeout=8, context=ssl_ctx) as lusha_resp:
                                                 lusha_data = json.loads(lusha_resp.read().decode("utf-8"))

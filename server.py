@@ -935,11 +935,11 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 pass
 
-            # ── Level 2: Try Lusha FIRST (fast) for director personal email ──
+            # ── Level 2: Try Lusha for director email (try up to 5 directors until email found) ──
             LUSHA_API_KEY = "939a946a-f6d8-4617-b020-6b08535ea8f3"
             lusha_headers = {"api_key": LUSHA_API_KEY, "Accept": "application/json"}
             director_contact = None
-            for d_info in all_dirs[:2]:
+            for d_info in all_dirs[:5]:
                 try:
                     lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(d_info['first'])}&lastName={urllib.parse.quote(d_info['last'])}&companyName={urllib.parse.quote(company_name)}"
                     lusha_req = urllib.request.Request(lusha_url, headers=lusha_headers)
@@ -947,16 +947,25 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                         lusha_data = json.loads(lusha_resp.read().decode("utf-8"))
                         l_emails = lusha_data.get("emailAddresses") or lusha_data.get("emails") or []
                         l_phones = lusha_data.get("phoneNumbers") or lusha_data.get("phones") or []
-                        if l_emails or l_phones:
-                            d_email = l_emails[0].get("email") or l_emails[0].get("value") or "" if l_emails else ""
-                            d_phone = ""
-                            if l_phones:
-                                d_phone = l_phones[0].get("number") or l_phones[0].get("internationalNumber") or l_phones[0].get("localNumber") or ""
+                        d_email = ""
+                        if l_emails:
+                            d_email = l_emails[0].get("email") or l_emails[0].get("value") or ""
+                        d_phone = ""
+                        if l_phones:
+                            d_phone = l_phones[0].get("number") or l_phones[0].get("internationalNumber") or l_phones[0].get("localNumber") or ""
+                        if d_email:
+                            # Found email — use this director
                             director_contact = {
                                 "name": d_info["name"], "title": d_info["title"],
                                 "email": d_email, "phone": d_phone, "source": "lusha",
                             }
                             break
+                        elif d_phone and not director_contact:
+                            # No email but has phone — save as fallback, keep looking for email
+                            director_contact = {
+                                "name": d_info["name"], "title": d_info["title"],
+                                "email": "", "phone": d_phone, "source": "lusha",
+                            }
                 except Exception:
                     continue
 

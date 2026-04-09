@@ -184,7 +184,18 @@
         "commune": "PARIS",
         "code_postal": "75009",
         "added_by": "admin",
-        "added_at": "2026-04-09T08:03:53.773152Z"
+        "added_at": "2026-04-09T08:03:53.773152Z",
+        "email_result": {
+          "email": "contact@sg.fr",
+          "all_emails": [
+            "contact@sg.fr",
+            "info@sg.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "SOCIETE GENERALE (SG)",
+          "source": "domain_pattern",
+          "director": null
+        }
       },
       "380129866": {
         "company_name": "ORANGE",

@@ -15,7 +15,19 @@
           "email": "benoit.masson@laposte.fr",
           "type": "cfo",
           "contact_name": "Benoit Masson",
-          "source": "cached_cfo"
+          "source": "cached_cfo",
+          "director": {
+            "name": "Benoit Masson",
+            "title": "CFO",
+            "is_cfo": true
+          },
+          "director_contact": {
+            "name": "Benoit Masson",
+            "title": "CFO",
+            "email": "benoit.masson@laposte.fr",
+            "phone": "+33 1 71 08 84 28",
+            "source": "lusha (cached)"
+          }
         }
       },
       "412280737": {
@@ -143,7 +155,19 @@
           "email": "benoit.masson@laposte.fr",
           "type": "cfo",
           "contact_name": "Benoit Masson",
-          "source": "cached_cfo"
+          "source": "cached_cfo",
+          "director": {
+            "name": "Benoit Masson",
+            "title": "CFO",
+            "is_cfo": true
+          },
+          "director_contact": {
+            "name": "Benoit Masson",
+            "title": "CFO",
+            "email": "benoit.masson@laposte.fr",
+            "phone": "+33 1 71 08 84 28",
+            "source": "lusha (cached)"
+          }
         }
       }
     }

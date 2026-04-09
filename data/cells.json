@@ -212,11 +212,7 @@
           "type": "company_guess",
           "contact_name": "ELIOR RESTAURATION FRANCE (ELIOR RESTAURATION ENSEIGNEMENT - ELIOR RESTAURATION SANTE)",
           "source": "domain_pattern",
-          "director": {
-            "name": "BORIS DERICHEBOURG",
-            "title": "Président de SAS",
-            "is_cfo": true
-          }
+          "director": null
         }
       },
       "217500016": {

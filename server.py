@@ -920,26 +920,47 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 pass
 
-            # ── Level 2: Scrape company website (LCEN - mentions légales) ──
-            # By French law (LCEN), every company must publish legal info including emails
+            # ── Level 2: Try Lusha FIRST (fast) for director personal email ──
+            LUSHA_API_KEY = "939a946a-f6d8-4617-b020-6b08535ea8f3"
+            lusha_headers = {"api_key": LUSHA_API_KEY, "Accept": "application/json"}
+            director_contact = None
+            for d_info in all_dirs[:2]:
+                try:
+                    lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(d_info['first'])}&lastName={urllib.parse.quote(d_info['last'])}&companyName={urllib.parse.quote(company_name)}"
+                    lusha_req = urllib.request.Request(lusha_url, headers=lusha_headers)
+                    with urllib.request.urlopen(lusha_req, timeout=8, context=ssl_ctx) as lusha_resp:
+                        lusha_data = json.loads(lusha_resp.read().decode("utf-8"))
+                        l_emails = lusha_data.get("emailAddresses") or lusha_data.get("emails") or []
+                        l_phones = lusha_data.get("phoneNumbers") or lusha_data.get("phones") or []
+                        if l_emails or l_phones:
+                            d_email = l_emails[0].get("email") or l_emails[0].get("value") or "" if l_emails else ""
+                            d_phone = ""
+                            if l_phones:
+                                d_phone = l_phones[0].get("number") or l_phones[0].get("internationalNumber") or l_phones[0].get("localNumber") or ""
+                            director_contact = {
+                                "name": d_info["name"], "title": d_info["title"],
+                                "email": d_email, "phone": d_phone, "source": "lusha",
+                            }
+                            break
+                except Exception:
+                    continue
+
+            # ── Level 3: Scrape company website (LCEN - mentions légales) ──
             domains = self._guess_domains(company_name)
             # Pages most likely to contain contact emails (LCEN compliance)
             lcen_paths = [
-                "/mentions-legales", "/mentions_legales", "/legal",
-                "/contact", "/contacts", "/nous-contacter",
-                "/a-propos", "/about", "/about-us",
-                "", "/fr", "/fr/contact", "/fr/mentions-legales",
+                "", "/contact", "/mentions-legales", "/about",
             ]
             best_emails = []
             found_domain = ""
-            for domain in domains[:4]:  # Try up to 4 domain guesses
+            for domain in domains[:2]:  # Try up to 2 domain guesses
                 if best_emails:
                     break
                 for path in lcen_paths:
                     if best_emails:
                         break
                     url = f"https://{domain}{path}"
-                    page_emails = self._scrape_url_for_emails(url, timeout=6)
+                    page_emails = self._scrape_url_for_emails(url, timeout=3)
                     if page_emails:
                         best_emails = page_emails
                         found_domain = domain
@@ -952,36 +973,6 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                     (i for i, p in enumerate(priority_prefixes) if e.startswith(p + "@")),
                     len(priority_prefixes)
                 ))
-
-            # ── Level 3: ALWAYS try Lusha for director personal email ──
-            LUSHA_API_KEY = "939a946a-f6d8-4617-b020-6b08535ea8f3"
-            lusha_headers = {"api_key": LUSHA_API_KEY, "Accept": "application/json"}
-            director_contact = None
-            for d_info in all_dirs[:2]:
-                try:
-                    lusha_url = f"https://api.lusha.com/v2/person?firstName={urllib.parse.quote(d_info['first'])}&lastName={urllib.parse.quote(d_info['last'])}&companyName={urllib.parse.quote(company_name)}"
-                    lusha_req = urllib.request.Request(lusha_url, headers=lusha_headers)
-                    with urllib.request.urlopen(lusha_req, timeout=10, context=ssl_ctx) as lusha_resp:
-                        lusha_data = json.loads(lusha_resp.read().decode("utf-8"))
-                        l_emails = lusha_data.get("emailAddresses") or lusha_data.get("emails") or []
-                        l_phones = lusha_data.get("phoneNumbers") or lusha_data.get("phones") or []
-                        if l_emails or l_phones:
-                            d_email = ""
-                            if l_emails:
-                                d_email = l_emails[0].get("email") or l_emails[0].get("value") or ""
-                            d_phone = ""
-                            if l_phones:
-                                d_phone = l_phones[0].get("number") or l_phones[0].get("internationalNumber") or l_phones[0].get("localNumber") or ""
-                            director_contact = {
-                                "name": d_info["name"],
-                                "title": d_info["title"],
-                                "email": d_email,
-                                "phone": d_phone,
-                                "source": "lusha",
-                            }
-                            break
-                except Exception:
-                    continue
 
             # Build final result with ALL collected data
             if best_emails or director_contact:

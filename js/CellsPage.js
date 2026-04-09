@@ -597,7 +597,7 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                         `}
                       </div>
 
-                      ${emailInfo && emailInfo.director && html`
+                      ${emailInfo && emailInfo.director && !emailInfo.director_contact && html`
                         <div className="mt-1 flex items-center gap-2 text-xs flex-wrap">
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
                             ${"👤"} ${emailInfo.director.name}
@@ -628,7 +628,7 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
                           `}
                         </div>
                       `}
-                      ${expandedEmail[siren] && emailInfo && emailInfo.email && html`
+                      ${expandedEmail[siren] && emailInfo && emailInfo.email && !(emailInfo.director_contact && emailInfo.director_contact.email === emailInfo.email) && html`
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                           <a href=${"mailto:" + emailInfo.email}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">

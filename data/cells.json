@@ -153,6 +153,47 @@
     "name": "test1",
     "created_by": "admin",
     "created_at": "2026-04-09T08:03:53.534020Z",
-    "companies": {}
+    "companies": {
+      "552081317": {
+        "company_name": "ELECTRICITE DE FRANCE (EDF)",
+        "categorie_entreprise": "GE",
+        "commune": "PARIS",
+        "code_postal": "75008",
+        "added_by": "admin",
+        "added_at": "2026-04-09T08:03:53.600023Z"
+      },
+      "662025196": {
+        "company_name": "ELIOR RESTAURATION FRANCE (ELIOR RESTAURATION ENSEIGNEMENT - ELIOR RESTAURATION SANTE)",
+        "categorie_entreprise": "GE",
+        "commune": "CRETEIL",
+        "code_postal": "94000",
+        "added_by": "admin",
+        "added_at": "2026-04-09T08:03:53.668990Z"
+      },
+      "217500016": {
+        "company_name": "VILLE DE PARIS",
+        "categorie_entreprise": "GE",
+        "commune": "PARIS 04",
+        "code_postal": "75004",
+        "added_by": "admin",
+        "added_at": "2026-04-09T08:03:53.721964Z"
+      },
+      "552120222": {
+        "company_name": "SOCIETE GENERALE (SG)",
+        "categorie_entreprise": "GE",
+        "commune": "PARIS",
+        "code_postal": "75009",
+        "added_by": "admin",
+        "added_at": "2026-04-09T08:03:53.773152Z"
+      },
+      "380129866": {
+        "company_name": "ORANGE",
+        "categorie_entreprise": "GE",
+        "commune": "ISSY-LES-MOULINEAUX",
+        "code_postal": "92130",
+        "added_by": "admin",
+        "added_at": "2026-04-09T08:03:53.823866Z"
+      }
+    }
   }
 }

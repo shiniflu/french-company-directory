@@ -192,7 +192,18 @@
         "commune": "ISSY-LES-MOULINEAUX",
         "code_postal": "92130",
         "added_by": "admin",
-        "added_at": "2026-04-09T08:03:53.823866Z"
+        "added_at": "2026-04-09T08:03:53.823866Z",
+        "email_result": {
+          "email": "contact@orange.fr",
+          "all_emails": [
+            "contact@orange.fr",
+            "info@orange.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "ORANGE",
+          "source": "domain_pattern",
+          "director": null
+        }
       }
     }
   }

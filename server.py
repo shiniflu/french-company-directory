@@ -1423,6 +1423,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                     try:
                         resend_data = json.dumps({
                             "from": f"{from_name} <sales@montelux.org>",
+                            "reply_to": "admin@montelux.com",
                             "to": [to_email],
                             "subject": subject,
                             "html": f"<div style='font-family:Arial,sans-serif;font-size:14px;'>{html_body}</div>",

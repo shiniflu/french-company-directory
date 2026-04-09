@@ -874,19 +874,34 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
             cfo_contacts = load_cfo_contacts()
             if siren in cfo_contacts:
                 cfo = cfo_contacts[siren]
-                emails = cfo.get("emails", [])
-                if emails:
-                    email = emails[0].get("email") or emails[0].get("value") or (emails[0] if isinstance(emails[0], str) else "")
-                    if email:
-                        result = {
-                            "email": email,
-                            "type": "cfo",
-                            "contact_name": f"{cfo.get('firstName', '')} {cfo.get('lastName', '')}".strip(),
-                            "source": "cached_cfo",
-                        }
-                        self._save_email_to_cell(siren, result)
-                        self.send_json(200, result)
-                        return
+                cfo_emails = cfo.get("emails", [])
+                cfo_phones = cfo.get("phones", [])
+                cfo_email = ""
+                if cfo_emails:
+                    cfo_email = cfo_emails[0].get("email") or cfo_emails[0].get("value") or (cfo_emails[0] if isinstance(cfo_emails[0], str) else "")
+                cfo_phone = ""
+                if cfo_phones:
+                    cfo_phone = cfo_phones[0].get("number") or cfo_phones[0].get("internationalNumber") or cfo_phones[0].get("localNumber") or (cfo_phones[0] if isinstance(cfo_phones[0], str) else "")
+                cfo_name = f"{cfo.get('firstName', '')} {cfo.get('lastName', '')}".strip()
+                cfo_title = cfo.get("title", "CFO")
+                if cfo_email or cfo_phone:
+                    result = {
+                        "email": cfo_email,
+                        "type": "cfo",
+                        "contact_name": cfo_name,
+                        "source": "cached_cfo",
+                        "director": {"name": cfo_name, "title": cfo_title, "is_cfo": True},
+                        "director_contact": {
+                            "name": cfo_name,
+                            "title": cfo_title,
+                            "email": cfo_email,
+                            "phone": cfo_phone,
+                            "source": "lusha (cached)",
+                        },
+                    }
+                    self._save_email_to_cell(siren, result)
+                    self.send_json(200, result)
+                    return
 
             # ── Pre-fetch: Get first director from French registry ──
             first_director = None

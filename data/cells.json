@@ -167,7 +167,18 @@
         "commune": "CRETEIL",
         "code_postal": "94000",
         "added_by": "admin",
-        "added_at": "2026-04-09T08:03:53.668990Z"
+        "added_at": "2026-04-09T08:03:53.668990Z",
+        "email_result": {
+          "email": "contact@eliorrestaurationenseignementeliorrestaurationsante.fr",
+          "all_emails": [
+            "contact@eliorrestaurationenseignementeliorrestaurationsante.fr",
+            "info@eliorrestaurationenseignementeliorrestaurationsante.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "ELIOR RESTAURATION FRANCE (ELIOR RESTAURATION ENSEIGNEMENT - ELIOR RESTAURATION SANTE)",
+          "source": "domain_pattern",
+          "director": null
+        }
       },
       "217500016": {
         "company_name": "VILLE DE PARIS",

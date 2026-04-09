@@ -67,6 +67,23 @@
       ],
       "total_sent": 1,
       "total_failed": 0
+    },
+    {
+      "sent_by": "admin",
+      "sent_at": "2026-04-09T08:39:08.371042+00:00",
+      "subject": "Test Reply-To from Montelux Sales",
+      "recipients": [
+        "admin@montelux.com"
+      ],
+      "results": [
+        {
+          "to": "admin@montelux.com",
+          "id": "0b6995a6-51f5-4568-932e-740cb32a9422",
+          "status": "sent"
+        }
+      ],
+      "total_sent": 1,
+      "total_failed": 0
     }
   ]
 }

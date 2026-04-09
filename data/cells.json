@@ -12,14 +12,10 @@
         "added_by": "admin",
         "added_at": "2026-03-27T10:40:27.498885Z",
         "email_result": {
-          "email": "contact@poste.fr",
-          "all_emails": [
-            "contact@poste.fr",
-            "info@poste.fr"
-          ],
-          "type": "company_guess",
-          "contact_name": "LA POSTE",
-          "source": "domain_pattern"
+          "email": "benoit.masson@laposte.fr",
+          "type": "cfo",
+          "contact_name": "Benoit Masson",
+          "source": "cached_cfo"
         }
       },
       "412280737": {
@@ -135,6 +131,12 @@
           "last_name": "AJDARI",
           "role": "Administrateur",
           "source": "registry"
+        },
+        "email_result": {
+          "email": "benoit.masson@laposte.fr",
+          "type": "cfo",
+          "contact_name": "Benoit Masson",
+          "source": "cached_cfo"
         }
       }
     }

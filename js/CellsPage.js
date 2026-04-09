@@ -234,7 +234,7 @@ function CellDetailView({ cellId, cell, onBack, onRemoveCompany, onNavigate }) {
     const body = composerBody || "";
     if (!subject) { alert("Please write a subject first (New Email or load a draft)."); return; }
 
-    if (!confirm("Send email via Resend to " + toEmails.length + " recipient(s)?\n\nFrom: noreply@sales.montelux.org\n\n" + toEmails.join("\n") + "\n\nSubject: " + subject)) return;
+    if (!confirm("Send email to " + toEmails.length + " recipient(s)?\n\nFrom: sales@montelux.org\n\n" + toEmails.join("\n") + "\n\nSubject: " + subject)) return;
 
     setSending(true);
     setSendResult(null);

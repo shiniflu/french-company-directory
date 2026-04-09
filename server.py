@@ -1416,7 +1416,7 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                 for to_email in to_emails:
                     try:
                         resend_data = json.dumps({
-                            "from": f"{from_name} <noreply@sales.montelux.org>",
+                            "from": f"{from_name} <sales@montelux.org>",
                             "to": [to_email],
                             "subject": subject,
                             "html": f"<div style='font-family:Arial,sans-serif;font-size:14px;'>{html_body}</div>",

@@ -115,16 +115,15 @@
         "added_by": "admin",
         "added_at": "2026-03-30T09:22:38.390878Z",
         "email_result": {
-          "email": "sg-protection.donnees@socgen.com",
+          "email": "contact@societe.fr",
           "all_emails": [
-            "sg-protection.donnees@socgen.com",
-            "comm-gdpr.world@socgen.com"
+            "contact@societe.fr",
+            "info@societe.fr"
           ],
-          "type": "company",
+          "type": "company_guess",
           "contact_name": "SOCIETE GENERALE",
-          "source": "website (societegenerale.com)",
-          "director": null,
-          "director_contact": null
+          "source": "domain_pattern",
+          "director": null
         }
       },
       "356000000": {

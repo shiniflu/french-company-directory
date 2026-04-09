@@ -117,7 +117,19 @@
         "commune": "PARIS",
         "code_postal": "75009",
         "added_by": "admin",
-        "added_at": "2026-03-30T09:22:38.390878Z"
+        "added_at": "2026-03-30T09:22:38.390878Z",
+        "email_result": {
+          "email": "comm-gdpr.world@socgen.com",
+          "all_emails": [
+            "comm-gdpr.world@socgen.com",
+            "sg-protection.donnees@socgen.com"
+          ],
+          "type": "company",
+          "contact_name": "SOCIETE GENERALE",
+          "source": "website (societegenerale.com)",
+          "director": null,
+          "director_contact": null
+        }
       },
       "356000000": {
         "company_name": "LA POSTE",

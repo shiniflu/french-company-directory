@@ -159,7 +159,18 @@
         "commune": "PARIS",
         "code_postal": "75008",
         "added_by": "admin",
-        "added_at": "2026-04-09T08:03:53.600023Z"
+        "added_at": "2026-04-09T08:03:53.600023Z",
+        "email_result": {
+          "email": "contact@edf.fr",
+          "all_emails": [
+            "contact@edf.fr",
+            "info@edf.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "ELECTRICITE DE FRANCE (EDF)",
+          "source": "domain_pattern",
+          "director": null
+        }
       },
       "662025196": {
         "company_name": "ELIOR RESTAURATION FRANCE (ELIOR RESTAURATION ENSEIGNEMENT - ELIOR RESTAURATION SANTE)",

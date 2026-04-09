@@ -250,7 +250,11 @@
           "type": "company_guess",
           "contact_name": "SOCIETE GENERALE (SG)",
           "source": "domain_pattern",
-          "director": null
+          "director": {
+            "name": "PHILIPPE AYMERICH",
+            "title": "Directeur général délégué",
+            "is_cfo": true
+          }
         }
       },
       "380129866": {

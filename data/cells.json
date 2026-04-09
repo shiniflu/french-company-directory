@@ -175,7 +175,18 @@
         "commune": "PARIS 04",
         "code_postal": "75004",
         "added_by": "admin",
-        "added_at": "2026-04-09T08:03:53.721964Z"
+        "added_at": "2026-04-09T08:03:53.721964Z",
+        "email_result": {
+          "email": "contact@ville.fr",
+          "all_emails": [
+            "contact@ville.fr",
+            "info@ville.fr"
+          ],
+          "type": "company_guess",
+          "contact_name": "VILLE DE PARIS",
+          "source": "domain_pattern",
+          "director": null
+        }
       },
       "552120222": {
         "company_name": "SOCIETE GENERALE (SG)",

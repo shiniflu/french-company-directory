@@ -84,6 +84,23 @@
       ],
       "total_sent": 1,
       "total_failed": 0
+    },
+    {
+      "sent_by": "admin",
+      "sent_at": "2026-04-09T08:40:31.637952+00:00",
+      "subject": "Reply Test - Montelux Sales",
+      "recipients": [
+        "n.bagay2005@gmail.com"
+      ],
+      "results": [
+        {
+          "to": "n.bagay2005@gmail.com",
+          "id": "12efab66-dc73-4619-92d9-a97853e92016",
+          "status": "sent"
+        }
+      ],
+      "total_sent": 1,
+      "total_failed": 0
     }
   ]
 }

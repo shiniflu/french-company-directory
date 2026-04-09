@@ -1424,10 +1424,15 @@ class AppHandler(http.server.SimpleHTTPRequestHandler):
                         req = urllib.request.Request(
                             "https://api.resend.com/emails",
                             data=resend_data,
-                            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+                            headers={
+                                "Authorization": f"Bearer {RESEND_API_KEY}",
+                                "Content-Type": "application/json",
+                                "User-Agent": "MonteluxSales/1.0",
+                                "Accept": "application/json",
+                            },
                             method="POST",
                         )
-                        with urllib.request.urlopen(req, timeout=15) as resp:
+                        with urllib.request.urlopen(req, timeout=15, context=ssl_ctx) as resp:
                             r = json.loads(resp.read().decode("utf-8"))
                             results.append({"to": to_email, "id": r.get("id", ""), "status": "sent"})
                     except urllib.error.HTTPError as e:
